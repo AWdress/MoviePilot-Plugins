@@ -34,10 +34,10 @@ def _truncate(text: str, limit: int) -> str:
 
 
 class AWEmbyPush(_PluginBase):
-    plugin_name = "AWEmbyPush 媒体通知"
-    plugin_desc = "入库后通过 Telegram / 企业微信 / Bark 发送精美媒体通知，优先使用 MP 内置配置。"
+    plugin_name = "AWEmbyPush"
+    plugin_desc = "原项目AWEmbyPush移植，入库后通过 Telegram / 企业微信 / Bark 发送精美媒体通知，优先使用 MP 内置配置。"
     plugin_icon = "https://raw.githubusercontent.com/walkxcode/dashboard-icons/main/png/emby.png"
-    plugin_version = "1.3.0"
+    plugin_version = "1.3.1"
     plugin_author = "AWdress"
     author_url = "https://github.com/AWdress/MoviePilot-Plugins"
     plugin_config_prefix = "awembypush_"
@@ -380,6 +380,14 @@ class AWEmbyPush(_PluginBase):
         )
         tmdb_url = (getattr(mediainfo, 'detail_link', None)
                     or f"https://www.themoviedb.org/{'tv' if is_episode else 'movie'}/{tmdb_id}")
+
+        server_name = ""
+        try:
+            if settings.MEDIASERVER:
+                server_name = settings.MEDIASERVER.split(",")[0].strip()
+        except Exception:
+            "media_intro": getattr(mediainfo, 'overview', None) or "",
+        server_name = server_name or "MoviePilot"
 
         media = {
             "media_name": getattr(mediainfo, 'title', None) or "",
