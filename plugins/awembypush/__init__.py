@@ -2,6 +2,7 @@
 # -*- coding: UTF-8 -*-
 import requests
 import traceback
+from datetime import datetime
 from typing import Any, List, Dict, Tuple, Optional
 
 from app.core.config import settings
@@ -36,7 +37,7 @@ class AWEmbyPush(_PluginBase):
     plugin_name = "AWEmbyPush 媒体通知"
     plugin_desc = "入库后通过 Telegram / 企业微信 / Bark 发送精美媒体通知，优先使用 MP 内置配置。"
     plugin_icon = "https://raw.githubusercontent.com/walkxcode/dashboard-icons/main/png/emby.png"
-    plugin_version = "1.1.0"
+    plugin_version = "1.2.0"
     plugin_author = "AWdress"
     author_url = "https://github.com/AWdress/MoviePilot-Plugins"
     plugin_config_prefix = "awembypush_"
@@ -127,7 +128,36 @@ class AWEmbyPush(_PluginBase):
         return []
 
     def get_page(self) -> List[dict]:
-        return []
+        logs: List[dict] = self.get_data("logs") or []
+        if not logs:
+            return [{'component': 'div', 'text': '暂无推送记录'}]
+        rows = []
+        for item in reversed(logs[-100:]):
+            color = "success" if item.get("status") == "成功" else "error"
+            rows.append({
+                'component': 'tr',
+                'content': [
+                    {'component': 'td', 'props': {'class': 'whitespace-nowrap'}, 'text': item.get("time", "")},
+                    {'component': 'td', 'text': item.get("title", "")},
+                    {'component': 'td', 'text': item.get("channel", "")},
+                    {'component': 'td', 'props': {'class': f'text-{color}'}, 'text': item.get("status", "")},
+                    {'component': 'td', 'text': item.get("msg", "")},
+                ]
+            })
+        return [
+            {'component': 'VTable', 'props': {'hover': True}, 'content': [
+                {'component': 'thead', 'content': [
+                    {'component': 'tr', 'content': [
+                        {'component': 'th', 'text': '时间'},
+                        {'component': 'th', 'text': '媒体'},
+                        {'component': 'th', 'text': '渠道'},
+                        {'component': 'th', 'text': '状态'},
+                        {'component': 'th', 'text': '详情'},
+                    ]}
+                ]},
+                {'component': 'tbody', 'content': rows}
+            ]}
+        ]
 
     def stop_service(self):
         pass
@@ -257,6 +287,18 @@ class AWEmbyPush(_PluginBase):
         }
 
     # ── 事件处理 ──────────────────────────────────────────────
+
+    def _log(self, title: str, channel: str, status: str, msg: str = ""):
+        """写入插件日志，最多保留 200 条"""
+        logs: List[dict] = self.get_data("logs") or []
+        logs.append({
+            "time": datetime.now().strftime("%m-%d %H:%M:%S"),
+            "title": title,
+            "channel": channel,
+            "status": status,
+            "msg": msg,
+        })
+        self.save_data("logs", logs[-200:])
 
     @eventmanager.register(EventType.TransferComplete)
     def on_transfer_complete(self, event: Event):
@@ -413,9 +455,10 @@ class AWEmbyPush(_PluginBase):
                     "chat_id": chat_id, "text": caption, "parse_mode": "HTML",
                 }, timeout=15, proxies=self._proxies)
             logger.info("AWEmbyPush Telegram 发送成功")
+            self._log(media.get("media_name", ""), "Telegram", "成功")
         except Exception as e:
             logger.error(f"AWEmbyPush Telegram 发送失败：{e}")
-
+            self._log(media.get("media_name", ""), "Telegram", "失败", str(e))
     # ── 企业微信 ──────────────────────────────────────────────
 
     def _get_wx_token(self) -> Optional[str]:
@@ -515,10 +558,13 @@ class AWEmbyPush(_PluginBase):
             data = res.json()
             if data.get("errcode", 0) == 0:
                 logger.info("AWEmbyPush 企业微信发送成功")
+                self._log(media.get("media_name", ""), "企业微信", "成功")
             else:
                 logger.error(f"AWEmbyPush 企业微信发送失败：{data}")
+                self._log(media.get("media_name", ""), "企业微信", "失败", str(data))
         except Exception as e:
             logger.error(f"AWEmbyPush 企业微信发送异常：{e}")
+            self._log(media.get("media_name", ""), "企业微信", "失败", str(e))
 
     # ── Bark ─────────────────────────────────────────────────
 
@@ -555,7 +601,10 @@ class AWEmbyPush(_PluginBase):
                                 timeout=15, proxies=self._proxies)
             if res.status_code == 200:
                 logger.info("AWEmbyPush Bark 发送成功")
+                self._log(media.get("media_name", ""), "Bark", "成功")
             else:
                 logger.error(f"AWEmbyPush Bark 发送失败：{res.status_code} {res.text}")
+                self._log(media.get("media_name", ""), "Bark", "失败", f"{res.status_code}")
         except Exception as e:
             logger.error(f"AWEmbyPush Bark 发送异常：{e}")
+            self._log(media.get("media_name", ""), "Bark", "失败", str(e))

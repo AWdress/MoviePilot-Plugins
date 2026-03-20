@@ -2,12 +2,14 @@
   "AWEmbyPush": {
     "name": "AWEmbyPush 媒体通知",
     "description": "入库后通过 Telegram / 企业微信 / Bark 发送精美媒体通知，样式与 AWEmbyPush 一致。",
-    "version": "1.1.0",
+    "version": "1.2.0",
     "v2": true,
     "icon": "https://raw.githubusercontent.com/walkxcode/dashboard-icons/main/png/emby.png",
     "author": "AWdress",
     "level": 1,
     "history": {
+      "v1.2.0": "新增插件详情页推送日志，记录每次推送的媒体、渠道、状态",
+      "v1.1.0": "优先读取 MP 内置 Telegram / 企业微信 / 代理配置，留空自动复用",
       "v1.0.0": "初始版本，支持 Telegram / 企业微信 / Bark 三渠道推送"
     }
   }
