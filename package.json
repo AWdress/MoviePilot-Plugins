@@ -2,7 +2,7 @@
   "AWEmbyPush": {
     "name": "AWEmbyPush 媒体通知",
     "description": "入库后通过 Telegram / 企业微信 / Bark 发送精美媒体通知，样式与 AWEmbyPush 一致。",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "v2": true,
     "icon": "https://raw.githubusercontent.com/walkxcode/dashboard-icons/main/png/emby.png",
     "author": "AWdress",

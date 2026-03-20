@@ -34,26 +34,26 @@ def _truncate(text: str, limit: int) -> str:
 
 class AWEmbyPush(_PluginBase):
     plugin_name = "AWEmbyPush 媒体通知"
-    plugin_desc = "入库后通过 Telegram / 企业微信 / Bark 发送精美媒体通知，样式与 AWEmbyPush 一致。"
+    plugin_desc = "入库后通过 Telegram / 企业微信 / Bark 发送精美媒体通知，优先使用 MP 内置配置。"
     plugin_icon = "https://raw.githubusercontent.com/walkxcode/dashboard-icons/main/png/emby.png"
-    plugin_version = "1.0.0"
+    plugin_version = "1.1.0"
     plugin_author = "AWdress"
-    author_url = "https://github.com/AWdress/AWEmbyPush"
+    author_url = "https://github.com/AWdress/MoviePilot-Plugins"
     plugin_config_prefix = "awembypush_"
     plugin_order = 20
     auth_level = 1
 
     _enabled: bool = False
-    # Telegram
+    # Telegram 自定义（留空则用 MP 内置）
     _tg_bot_token: str = ""
     _tg_chat_id: str = ""
-    _tg_api_host: str = "https://api.telegram.org"
-    # 企业微信
+    _tg_api_host: str = ""
+    # 企业微信自定义（留空则用 MP 内置）
     _wx_corp_id: str = ""
     _wx_corp_secret: str = ""
     _wx_agent_id: str = ""
     _wx_user_id: str = "@all"
-    _wx_proxy_url: str = "https://qyapi.weixin.qq.com"
+    _wx_proxy_url: str = ""
     _wx_msg_type: str = "news_notice"
     # Bark
     _bark_server: str = "https://api.day.app"
@@ -69,18 +69,52 @@ class AWEmbyPush(_PluginBase):
         self._enabled = config.get("enabled", False)
         self._tg_bot_token = config.get("tg_bot_token", "")
         self._tg_chat_id = config.get("tg_chat_id", "")
-        self._tg_api_host = config.get("tg_api_host", "https://api.telegram.org").rstrip("/")
+        self._tg_api_host = config.get("tg_api_host", "").rstrip("/")
         self._wx_corp_id = config.get("wx_corp_id", "")
         self._wx_corp_secret = config.get("wx_corp_secret", "")
         self._wx_agent_id = config.get("wx_agent_id", "")
         self._wx_user_id = config.get("wx_user_id", "@all")
-        self._wx_proxy_url = config.get("wx_proxy_url", "https://qyapi.weixin.qq.com").rstrip("/")
+        self._wx_proxy_url = config.get("wx_proxy_url", "").rstrip("/")
         self._wx_msg_type = config.get("wx_msg_type", "news_notice")
         self._bark_server = config.get("bark_server", "https://api.day.app").rstrip("/")
         self._bark_keys = config.get("bark_keys", "")
         self._enable_watch_link = config.get("enable_watch_link", False)
         self._watch_link_type = config.get("watch_link_type", "server")
         self._emby_server_url = config.get("emby_server_url", "").rstrip("/")
+
+    # ── 内置配置读取 ──────────────────────────────────────────
+
+    @property
+    def _effective_tg_token(self) -> str:
+        return self._tg_bot_token or (settings.TELEGRAM_TOKEN or "")
+
+    @property
+    def _effective_tg_chat_id(self) -> str:
+        return self._tg_chat_id or (settings.TELEGRAM_CHAT_ID or "")
+
+    @property
+    def _effective_tg_api_host(self) -> str:
+        return self._tg_api_host or "https://api.telegram.org"
+
+    @property
+    def _effective_wx_corp_id(self) -> str:
+        return self._wx_corp_id or (settings.WECHAT_CORPID or "")
+
+    @property
+    def _effective_wx_corp_secret(self) -> str:
+        return self._wx_corp_secret or (settings.WECHAT_APP_SECRET or "")
+
+    @property
+    def _effective_wx_agent_id(self) -> str:
+        return self._wx_agent_id or (settings.WECHAT_APP_ID or "")
+
+    @property
+    def _effective_wx_proxy_url(self) -> str:
+        return self._wx_proxy_url or (settings.WECHAT_PROXY or "https://qyapi.weixin.qq.com")
+
+    @property
+    def _proxies(self) -> Optional[dict]:
+        return settings.PROXY
 
     def get_state(self) -> bool:
         return self._enabled
@@ -122,38 +156,47 @@ class AWEmbyPush(_PluginBase):
                             }}
                         ]},
                     ]},
+                    # 提示
+                    {'component': 'VRow', 'content': [
+                        {'component': 'VCol', 'props': {'cols': 12}, 'content': [
+                            {'component': 'VAlert', 'props': {
+                                'type': 'info', 'variant': 'tonal',
+                                'text': 'Telegram / 企业微信 留空则自动使用 MP 系统内置配置，填写则覆盖内置配置。'
+                            }}
+                        ]}
+                    ]},
                     # Telegram
                     {'component': 'VRow', 'content': [
                         {'component': 'VCol', 'props': {'cols': 12}, 'content': [
-                            {'component': 'VAlert', 'props': {'type': 'info', 'variant': 'tonal', 'text': '── Telegram 配置 ──'}}
+                            {'component': 'VAlert', 'props': {'type': 'info', 'variant': 'tonal', 'text': '── Telegram 配置（留空使用 MP 内置）──'}}
                         ]}
                     ]},
                     {'component': 'VRow', 'content': [
                         {'component': 'VCol', 'props': {'cols': 12, 'md': 4}, 'content': [
-                            {'component': 'VTextField', 'props': {'model': 'tg_bot_token', 'label': 'Bot Token', 'placeholder': '留空则不启用'}}
+                            {'component': 'VTextField', 'props': {'model': 'tg_bot_token', 'label': 'Bot Token', 'placeholder': '留空使用 MP 内置 Telegram Token'}}
                         ]},
                         {'component': 'VCol', 'props': {'cols': 12, 'md': 4}, 'content': [
-                            {'component': 'VTextField', 'props': {'model': 'tg_chat_id', 'label': 'Chat ID'}}
+                            {'component': 'VTextField', 'props': {'model': 'tg_chat_id', 'label': 'Chat ID', 'placeholder': '留空使用 MP 内置 Chat ID'}}
                         ]},
                         {'component': 'VCol', 'props': {'cols': 12, 'md': 4}, 'content': [
-                            {'component': 'VTextField', 'props': {'model': 'tg_api_host', 'label': 'API Host', 'placeholder': 'https://api.telegram.org'}}
+                            {'component': 'VTextField', 'props': {'model': 'tg_api_host', 'label': 'API Host', 'placeholder': '留空使用 https://api.telegram.org'}}
                         ]},
                     ]},
                     # 企业微信
                     {'component': 'VRow', 'content': [
                         {'component': 'VCol', 'props': {'cols': 12}, 'content': [
-                            {'component': 'VAlert', 'props': {'type': 'info', 'variant': 'tonal', 'text': '── 企业微信配置 ──'}}
+                            {'component': 'VAlert', 'props': {'type': 'info', 'variant': 'tonal', 'text': '── 企业微信配置（留空使用 MP 内置）──'}}
                         ]}
                     ]},
                     {'component': 'VRow', 'content': [
                         {'component': 'VCol', 'props': {'cols': 12, 'md': 3}, 'content': [
-                            {'component': 'VTextField', 'props': {'model': 'wx_corp_id', 'label': 'Corp ID', 'placeholder': '留空则不启用'}}
+                            {'component': 'VTextField', 'props': {'model': 'wx_corp_id', 'label': 'Corp ID', 'placeholder': '留空使用 MP 内置'}}
                         ]},
                         {'component': 'VCol', 'props': {'cols': 12, 'md': 3}, 'content': [
-                            {'component': 'VTextField', 'props': {'model': 'wx_corp_secret', 'label': 'Corp Secret'}}
+                            {'component': 'VTextField', 'props': {'model': 'wx_corp_secret', 'label': 'Corp Secret', 'placeholder': '留空使用 MP 内置'}}
                         ]},
                         {'component': 'VCol', 'props': {'cols': 12, 'md': 3}, 'content': [
-                            {'component': 'VTextField', 'props': {'model': 'wx_agent_id', 'label': 'Agent ID'}}
+                            {'component': 'VTextField', 'props': {'model': 'wx_agent_id', 'label': 'Agent ID', 'placeholder': '留空使用 MP 内置'}}
                         ]},
                         {'component': 'VCol', 'props': {'cols': 12, 'md': 3}, 'content': [
                             {'component': 'VSelect', 'props': {
@@ -170,7 +213,7 @@ class AWEmbyPush(_PluginBase):
                             {'component': 'VTextField', 'props': {'model': 'wx_user_id', 'label': '接收用户', 'placeholder': '@all'}}
                         ]},
                         {'component': 'VCol', 'props': {'cols': 12, 'md': 6}, 'content': [
-                            {'component': 'VTextField', 'props': {'model': 'wx_proxy_url', 'label': '代理地址', 'placeholder': 'https://qyapi.weixin.qq.com'}}
+                            {'component': 'VTextField', 'props': {'model': 'wx_proxy_url', 'label': '代理地址', 'placeholder': '留空使用 MP 内置微信代理'}}
                         ]},
                     ]},
                     # Bark
@@ -184,7 +227,7 @@ class AWEmbyPush(_PluginBase):
                             {'component': 'VTextField', 'props': {'model': 'bark_server', 'label': 'Bark 服务器', 'placeholder': 'https://api.day.app'}}
                         ]},
                         {'component': 'VCol', 'props': {'cols': 12, 'md': 8}, 'content': [
-                            {'component': 'VTextField', 'props': {'model': 'bark_keys', 'label': '设备 Key（多个用逗号分隔）', 'placeholder': '留空则不启用'}}
+                            {'component': 'VTextField', 'props': {'model': 'bark_keys', 'label': '设备 Key（多个用逗号分隔）', 'placeholder': '留空则不启用 Bark'}}
                         ]},
                     ]},
                     # 服务器
@@ -201,12 +244,12 @@ class AWEmbyPush(_PluginBase):
             "watch_link_type": "server",
             "tg_bot_token": "",
             "tg_chat_id": "",
-            "tg_api_host": "https://api.telegram.org",
+            "tg_api_host": "",
             "wx_corp_id": "",
             "wx_corp_secret": "",
             "wx_agent_id": "",
             "wx_user_id": "@all",
-            "wx_proxy_url": "https://qyapi.weixin.qq.com",
+            "wx_proxy_url": "",
             "wx_msg_type": "news_notice",
             "bark_server": "https://api.day.app",
             "bark_keys": "",
@@ -232,16 +275,10 @@ class AWEmbyPush(_PluginBase):
             logger.error(f"AWEmbyPush 处理入库事件失败：{traceback.format_exc()}")
 
     def _dispatch(self, mediainfo: MediaInfo, meta):
-        """构建媒体字典并分发到各渠道"""
         is_episode = mediainfo.type == MediaType.TV
+        season = (getattr(meta, 'begin_season', None) or getattr(meta, 'season', None) or 1)
+        episode = (getattr(meta, 'begin_episode', None) or getattr(meta, 'episode', None) or 1)
 
-        # 季/集号：兼容 V1 (begin_season/begin_episode) 和 V2 (season/episode)
-        season = (getattr(meta, 'begin_season', None)
-                  or getattr(meta, 'season', None) or 1)
-        episode = (getattr(meta, 'begin_episode', None)
-                   or getattr(meta, 'episode', None) or 1)
-
-        # 类型文字：从 tmdb_info 的 genres 列表取，genre_ids 无法直接翻译
         genre_names = []
         tmdb_info = getattr(mediainfo, 'tmdb_info', None) or {}
         raw_genres = tmdb_info.get('genres', [])
@@ -249,18 +286,14 @@ class AWEmbyPush(_PluginBase):
             genre_names = [g.get('name', '') for g in raw_genres[:3] if g.get('name')]
         genres_text = _translate_genres(genre_names) if genre_names else ("剧集" if is_episode else "电影")
 
-        # 演员：从 tmdb_info credits 取，或 mediainfo.actors
         cast_text = ""
         actors = getattr(mediainfo, 'actors', None) or []
         if not actors:
             credits = tmdb_info.get('credits', {})
             actors = credits.get('cast', []) if credits else []
         if actors:
-            cast_text = ", ".join(
-                a.get('name', '') for a in actors[:5] if a.get('name')
-            )
+            cast_text = ", ".join(a.get('name', '') for a in actors[:5] if a.get('name'))
 
-        # 图片：backdrop_path/poster_path 可能是相对路径或完整 URL
         image_domain = "https://image.tmdb.org/t/p/w780"
         def _full_url(path: str) -> str:
             if not path:
@@ -269,13 +302,8 @@ class AWEmbyPush(_PluginBase):
 
         backdrop = _full_url(mediainfo.backdrop_path)
         poster = _full_url(mediainfo.poster_path)
+        release_date = (mediainfo.release_date or tmdb_info.get('first_air_date', '') or mediainfo.year or "")
 
-        # 发行日期：电影用 release_date，剧集用 first_air_date 降级
-        release_date = (mediainfo.release_date
-                        or tmdb_info.get('first_air_date', '')
-                        or mediainfo.year or "")
-
-        # 播放链接
         tmdb_id = str(mediainfo.tmdb_id) if mediainfo.tmdb_id else ""
         imdb_id = mediainfo.imdb_id or ""
         play_url = self._build_play_url(
@@ -287,14 +315,13 @@ class AWEmbyPush(_PluginBase):
         tmdb_url = (getattr(mediainfo, 'detail_link', None)
                     or f"https://www.themoviedb.org/{'tv' if is_episode else 'movie'}/{tmdb_id}")
 
-        # 媒体服务器名称：取 MP 配置的第一个，多个时用逗号拼接，降级显示 MoviePilot
-        mediaserver_names = ""
+        server_name = ""
         try:
             if settings.MEDIASERVER:
-                mediaserver_names = settings.MEDIASERVER.split(",")[0].strip()
+                server_name = settings.MEDIASERVER.split(",")[0].strip()
         except Exception:
             pass
-        server_name = mediaserver_names or "MoviePilot"
+        server_name = server_name or "MoviePilot"
 
         media = {
             "media_name": mediainfo.title or "",
@@ -307,17 +334,15 @@ class AWEmbyPush(_PluginBase):
             "media_tmdburl": tmdb_url,
             "media_backdrop": backdrop,
             "media_poster": poster,
-            "media_still": backdrop,
             "tv_season": season,
             "tv_episode": episode,
             "server_name": server_name,
-            "server_type": "Emby",
             "play_url": play_url,
         }
 
-        if self._tg_bot_token and self._tg_chat_id:
+        if self._effective_tg_token and self._effective_tg_chat_id:
             self._send_telegram(media)
-        if self._wx_corp_id and self._wx_corp_secret and self._wx_agent_id:
+        if self._effective_wx_corp_id and self._effective_wx_corp_secret and self._effective_wx_agent_id:
             self._send_wechat(media)
         if self._bark_server and self._bark_keys:
             self._send_bark(media)
@@ -337,7 +362,6 @@ class AWEmbyPush(_PluginBase):
             if is_episode:
                 return f"infuse://series/{tmdb_id}-{tv_season}-{tv_episode}"
             return f"infuse://movie/{tmdb_id}"
-        # 默认 server 直链（infuse 无 tmdb_id 也降级到这里）
         base = self._emby_server_url
         if not base or not tmdb_id:
             return base or ""
@@ -374,22 +398,20 @@ class AWEmbyPush(_PluginBase):
 
         photo = media.get("media_backdrop") or media.get("media_poster") or ""
         try:
-            api = self._tg_api_host
+            api = self._effective_tg_api_host
+            token = self._effective_tg_token
+            chat_id = self._effective_tg_chat_id
             if photo:
-                url = f"{api}/bot{self._tg_bot_token}/sendPhoto"
+                url = f"{api}/bot{token}/sendPhoto"
                 requests.post(url, json={
-                    "chat_id": self._tg_chat_id,
-                    "photo": photo,
-                    "caption": caption,
-                    "parse_mode": "HTML",
-                }, timeout=15)
+                    "chat_id": chat_id, "photo": photo,
+                    "caption": caption, "parse_mode": "HTML",
+                }, timeout=15, proxies=self._proxies)
             else:
-                url = f"{api}/bot{self._tg_bot_token}/sendMessage"
+                url = f"{api}/bot{token}/sendMessage"
                 requests.post(url, json={
-                    "chat_id": self._tg_chat_id,
-                    "text": caption,
-                    "parse_mode": "HTML",
-                }, timeout=15)
+                    "chat_id": chat_id, "text": caption, "parse_mode": "HTML",
+                }, timeout=15, proxies=self._proxies)
             logger.info("AWEmbyPush Telegram 发送成功")
         except Exception as e:
             logger.error(f"AWEmbyPush Telegram 发送失败：{e}")
@@ -398,11 +420,11 @@ class AWEmbyPush(_PluginBase):
 
     def _get_wx_token(self) -> Optional[str]:
         try:
-            url = f"{self._wx_proxy_url}/cgi-bin/gettoken"
+            url = f"{self._effective_wx_proxy_url}/cgi-bin/gettoken"
             res = requests.get(url, params={
-                "corpid": self._wx_corp_id,
-                "corpsecret": self._wx_corp_secret,
-            }, timeout=10)
+                "corpid": self._effective_wx_corp_id,
+                "corpsecret": self._effective_wx_corp_secret,
+            }, timeout=10, proxies=self._proxies)
             data = res.json()
             if data.get("errcode", 0) == 0:
                 return data["access_token"]
@@ -423,9 +445,11 @@ class AWEmbyPush(_PluginBase):
         image_url = media.get("media_backdrop") or media.get("media_poster") or ""
         play_url = media["play_url"]
         tmdb_url = media["media_tmdburl"]
+        agent_id = self._effective_wx_agent_id
+        agent_id_val = int(agent_id) if str(agent_id).isdigit() else agent_id
 
         try:
-            url = f"{self._wx_proxy_url}/cgi-bin/message/send?access_token={token}"
+            url = f"{self._effective_wx_proxy_url}/cgi-bin/message/send?access_token={token}"
             if self._wx_msg_type == "news_notice":
                 card = {
                     "card_type": "news_notice",
@@ -459,7 +483,7 @@ class AWEmbyPush(_PluginBase):
                 payload = {
                     "touser": self._wx_user_id,
                     "msgtype": "template_card",
-                    "agentid": int(self._wx_agent_id) if str(self._wx_agent_id).isdigit() else self._wx_agent_id,
+                    "agentid": agent_id_val,
                     "template_card": card,
                 }
             else:
@@ -479,7 +503,7 @@ class AWEmbyPush(_PluginBase):
                 payload = {
                     "touser": self._wx_user_id,
                     "msgtype": "news",
-                    "agentid": int(self._wx_agent_id) if str(self._wx_agent_id).isdigit() else self._wx_agent_id,
+                    "agentid": agent_id_val,
                     "news": {"articles": [{
                         "title": title_text,
                         "description": desc,
@@ -487,7 +511,7 @@ class AWEmbyPush(_PluginBase):
                         "picurl": image_url,
                     }]},
                 }
-            res = requests.post(url, json=payload, timeout=15)
+            res = requests.post(url, json=payload, timeout=15, proxies=self._proxies)
             data = res.json()
             if data.get("errcode", 0) == 0:
                 logger.info("AWEmbyPush 企业微信发送成功")
@@ -527,7 +551,8 @@ class AWEmbyPush(_PluginBase):
             "device_keys": [k.strip() for k in self._bark_keys.split(",") if k.strip()],
         }
         try:
-            res = requests.post(f"{self._bark_server}/push", json=payload, timeout=15)
+            res = requests.post(f"{self._bark_server}/push", json=payload,
+                                timeout=15, proxies=self._proxies)
             if res.status_code == 200:
                 logger.info("AWEmbyPush Bark 发送成功")
             else:
