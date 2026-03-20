@@ -337,8 +337,8 @@ class AWEmbyPush(_PluginBase):
             if not mediainfo:
                 return
             self._dispatch(mediainfo, meta)
-        except Exception:
-            logger.error(f"AWEmbyPush 处理入库事件失败：{traceback.format_exc()}")
+        except Exception as e:
+            logger.error(f"AWEmbyPush 处理入库事件失败：{e}\n{traceback.format_exc()}")
 
     def _dispatch(self, mediainfo: MediaInfo, meta):
         is_episode = mediainfo.type == MediaType.TV
@@ -366,12 +366,12 @@ class AWEmbyPush(_PluginBase):
                 return ""
             return path if path.startswith("http") else f"{image_domain}{path}"
 
-        backdrop = _full_url(mediainfo.backdrop_path)
-        poster = _full_url(mediainfo.poster_path)
-        release_date = (mediainfo.release_date or tmdb_info.get('first_air_date', '') or mediainfo.year or "")
+        backdrop = _full_url(getattr(mediainfo, 'backdrop_path', None))
+        poster = _full_url(getattr(mediainfo, 'poster_path', None))
+        release_date = (getattr(mediainfo, 'release_date', None) or tmdb_info.get('first_air_date', '') or getattr(mediainfo, 'year', None) or "")
 
-        tmdb_id = str(mediainfo.tmdb_id) if mediainfo.tmdb_id else ""
-        imdb_id = mediainfo.imdb_id or ""
+        tmdb_id = str(mediainfo.tmdb_id) if getattr(mediainfo, 'tmdb_id', None) else ""
+        imdb_id = getattr(mediainfo, 'imdb_id', None) or ""
         play_url = self._build_play_url(
             tmdb_id=tmdb_id, imdb_id=imdb_id,
             media_name=mediainfo.title or "",
@@ -381,18 +381,10 @@ class AWEmbyPush(_PluginBase):
         tmdb_url = (getattr(mediainfo, 'detail_link', None)
                     or f"https://www.themoviedb.org/{'tv' if is_episode else 'movie'}/{tmdb_id}")
 
-        server_name = ""
-        try:
-            if settings.MEDIASERVER:
-                server_name = settings.MEDIASERVER.split(",")[0].strip()
-        except Exception:
-            pass
-        server_name = server_name or "MoviePilot"
-
         media = {
-            "media_name": mediainfo.title or "",
+            "media_name": getattr(mediainfo, 'title', None) or "",
             "media_type": "Episode" if is_episode else "Movie",
-            "media_rating": mediainfo.vote_average or 0,
+            "media_rating": getattr(mediainfo, 'vote_average', None) or 0,
             "media_rel": release_date,
             "media_intro": mediainfo.overview or "",
             "media_genres": genres_text,
