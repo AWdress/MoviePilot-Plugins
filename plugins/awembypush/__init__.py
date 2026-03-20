@@ -386,7 +386,7 @@ class AWEmbyPush(_PluginBase):
             if settings.MEDIASERVER:
                 server_name = settings.MEDIASERVER.split(",")[0].strip()
         except Exception:
-            "media_intro": getattr(mediainfo, 'overview', None) or "",
+            pass
         server_name = server_name or "MoviePilot"
 
         media = {
@@ -394,7 +394,7 @@ class AWEmbyPush(_PluginBase):
             "media_type": "Episode" if is_episode else "Movie",
             "media_rating": getattr(mediainfo, 'vote_average', None) or 0,
             "media_rel": release_date,
-            "media_intro": mediainfo.overview or "",
+            "media_intro": getattr(mediainfo, 'overview', None) or "",
             "media_genres": genres_text,
             "media_cast": cast_text,
             "media_tmdburl": tmdb_url,
