@@ -1,0 +1,17 @@
+{
+  "plugins": {
+    "AWEmbyPush": {
+      "id": "AWEmbyPush",
+      "name": "AWEmbyPush 媒体通知",
+      "description": "入库后通过 Telegram / 企业微信 / Bark 发送精美媒体通知，样式与 AWEmbyPush 一致。",
+      "version": "1.0.0",
+      "author": "AWdress",
+      "author_url": "https://github.com/AWdress/AWEmbyPush",
+      "icon": "https://raw.githubusercontent.com/walkxcode/dashboard-icons/main/png/emby.png",
+      "color": "#00A4DC",
+      "history": {
+        "v1.0.0": "初始版本，支持 Telegram / 企业微信 / Bark 三渠道推送"
+      }
+    }
+  }
+}
