@@ -37,7 +37,7 @@ class AWEmbyPush(_PluginBase):
     plugin_name = "AWEmbyPush"
     plugin_desc = "原项目AWEmbyPush移植，入库后通过 Telegram / 企业微信 / Bark 发送精美媒体通知，优先使用 MP 内置配置。"
     plugin_icon = "https://raw.githubusercontent.com/walkxcode/dashboard-icons/main/png/emby.png"
-    plugin_version = "1.3.2"
+    plugin_version = "1.3.3"
     plugin_author = "AWdress"
     author_url = "https://github.com/AWdress/MoviePilot-Plugins"
     plugin_config_prefix = "awembypush_"
@@ -87,11 +87,11 @@ class AWEmbyPush(_PluginBase):
 
     @property
     def _effective_tg_token(self) -> str:
-        return self._tg_bot_token or (settings.TELEGRAM_TOKEN or "")
+        return self._tg_bot_token or (getattr(settings, 'TELEGRAM_TOKEN', None) or "")
 
     @property
     def _effective_tg_chat_id(self) -> str:
-        return self._tg_chat_id or (settings.TELEGRAM_CHAT_ID or "")
+        return self._tg_chat_id or (getattr(settings, 'TELEGRAM_CHAT_ID', None) or "")
 
     @property
     def _effective_tg_api_host(self) -> str:
@@ -99,23 +99,23 @@ class AWEmbyPush(_PluginBase):
 
     @property
     def _effective_wx_corp_id(self) -> str:
-        return self._wx_corp_id or (settings.WECHAT_CORPID or "")
+        return self._wx_corp_id or (getattr(settings, 'WECHAT_CORPID', None) or "")
 
     @property
     def _effective_wx_corp_secret(self) -> str:
-        return self._wx_corp_secret or (settings.WECHAT_APP_SECRET or "")
+        return self._wx_corp_secret or (getattr(settings, 'WECHAT_APP_SECRET', None) or "")
 
     @property
     def _effective_wx_agent_id(self) -> str:
-        return self._wx_agent_id or (settings.WECHAT_APP_ID or "")
+        return self._wx_agent_id or (getattr(settings, 'WECHAT_APP_ID', None) or "")
 
     @property
     def _effective_wx_proxy_url(self) -> str:
-        return self._wx_proxy_url or (settings.WECHAT_PROXY or "https://qyapi.weixin.qq.com")
+        return self._wx_proxy_url or (getattr(settings, 'WECHAT_PROXY', None) or "https://qyapi.weixin.qq.com")
 
     @property
     def _proxies(self) -> Optional[dict]:
-        return settings.PROXY
+        return getattr(settings, 'PROXY', None)
 
     def get_state(self) -> bool:
         return self._enabled
