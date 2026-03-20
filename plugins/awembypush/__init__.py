@@ -37,7 +37,7 @@ class AWEmbyPush(_PluginBase):
     plugin_name = "AWEmbyPush 媒体通知"
     plugin_desc = "入库后通过 Telegram / 企业微信 / Bark 发送精美媒体通知，优先使用 MP 内置配置。"
     plugin_icon = "https://raw.githubusercontent.com/walkxcode/dashboard-icons/main/png/emby.png"
-    plugin_version = "1.2.0"
+    plugin_version = "1.3.0"
     plugin_author = "AWdress"
     author_url = "https://github.com/AWdress/MoviePilot-Plugins"
     plugin_config_prefix = "awembypush_"
@@ -128,36 +128,72 @@ class AWEmbyPush(_PluginBase):
         return []
 
     def get_page(self) -> List[dict]:
-        logs: List[dict] = self.get_data("logs") or []
-        if not logs:
-            return [{'component': 'div', 'text': '暂无推送记录'}]
-        rows = []
-        for item in reversed(logs[-100:]):
-            color = "success" if item.get("status") == "成功" else "error"
-            rows.append({
-                'component': 'tr',
+        cards: List[dict] = self.get_data("recent_cards") or []
+        if not cards:
+            return [{'component': 'div', 'props': {'class': 'text-center'}, 'text': '暂无推送记录'}]
+        contents = []
+        for card in reversed(cards):
+            is_ep = card.get("media_type") == "Episode"
+            subtitle_parts = []
+            if is_ep:
+                subtitle_parts.append(f"第{card.get('tv_season')}季 第{card.get('tv_episode')}集")
+            if card.get("media_genres"):
+                subtitle_parts.append(card["media_genres"])
+            if card.get("media_rating"):
+                subtitle_parts.append(f"⭐ {card['media_rating']}")
+            subtitle = "  |  ".join(subtitle_parts)
+            contents.append({
+                'component': 'VCard',
+                'props': {'variant': 'tonal'},
                 'content': [
-                    {'component': 'td', 'props': {'class': 'whitespace-nowrap'}, 'text': item.get("time", "")},
-                    {'component': 'td', 'text': item.get("title", "")},
-                    {'component': 'td', 'text': item.get("channel", "")},
-                    {'component': 'td', 'props': {'class': f'text-{color}'}, 'text': item.get("status", "")},
-                    {'component': 'td', 'text': item.get("msg", "")},
+                    {
+                        'component': 'div',
+                        'props': {'class': 'd-flex justify-space-start flex-nowrap flex-row'},
+                        'content': [
+                            {
+                                'component': 'div',
+                                'content': [{
+                                    'component': 'VImg',
+                                    'props': {
+                                        'src': card.get("poster") or card.get("backdrop") or "",
+                                        'height': 120,
+                                        'width': 80,
+                                        'aspect-ratio': '2/3',
+                                        'class': 'object-cover shadow ring-gray-500',
+                                        'cover': True,
+                                    }
+                                }]
+                            },
+                            {
+                                'component': 'div',
+                                'props': {'class': 'flex-1 min-w-0'},
+                                'content': [
+                                    {
+                                        'component': 'VCardTitle',
+                                        'props': {'class': 'ps-2 pe-2 break-words whitespace-break-spaces'},
+                                        'content': [{
+                                            'component': 'a',
+                                            'props': {'href': card.get("tmdb_url", ""), 'target': '_blank'},
+                                            'text': card.get("media_name", "")
+                                        }]
+                                    },
+                                    {
+                                        'component': 'VCardText',
+                                        'props': {'class': 'pa-0 px-2 text-caption'},
+                                        'text': subtitle
+                                    },
+                                    {
+                                        'component': 'VCardText',
+                                        'props': {'class': 'pa-0 px-2 text-caption'},
+                                        'text': f"🕐 {card.get('time', '')}  📡 {card.get('channels', '')}"
+                                    },
+                                ]
+                            }
+                        ]
+                    }
                 ]
             })
-        return [
-            {'component': 'VTable', 'props': {'hover': True}, 'content': [
-                {'component': 'thead', 'content': [
-                    {'component': 'tr', 'content': [
-                        {'component': 'th', 'text': '时间'},
-                        {'component': 'th', 'text': '媒体'},
-                        {'component': 'th', 'text': '渠道'},
-                        {'component': 'th', 'text': '状态'},
-                        {'component': 'th', 'text': '详情'},
-                    ]}
-                ]},
-                {'component': 'tbody', 'content': rows}
-            ]}
-        ]
+        return [{'component': 'div', 'props': {'class': 'grid gap-3 grid-info-card'}, 'content': contents}]
 
     def stop_service(self):
         pass
@@ -288,18 +324,6 @@ class AWEmbyPush(_PluginBase):
 
     # ── 事件处理 ──────────────────────────────────────────────
 
-    def _log(self, title: str, channel: str, status: str, msg: str = ""):
-        """写入插件日志，最多保留 200 条"""
-        logs: List[dict] = self.get_data("logs") or []
-        logs.append({
-            "time": datetime.now().strftime("%m-%d %H:%M:%S"),
-            "title": title,
-            "channel": channel,
-            "status": status,
-            "msg": msg,
-        })
-        self.save_data("logs", logs[-200:])
-
     @eventmanager.register(EventType.TransferComplete)
     def on_transfer_complete(self, event: Event):
         if not self._enabled:
@@ -389,6 +413,30 @@ class AWEmbyPush(_PluginBase):
         if self._bark_server and self._bark_keys:
             self._send_bark(media)
 
+        # 保存最近 5 条推送卡片
+        sent_channels = []
+        if self._effective_tg_token and self._effective_tg_chat_id:
+            sent_channels.append("Telegram")
+        if self._effective_wx_corp_id and self._effective_wx_corp_secret and self._effective_wx_agent_id:
+            sent_channels.append("微信")
+        if self._bark_server and self._bark_keys:
+            sent_channels.append("Bark")
+        cards: List[dict] = self.get_data("recent_cards") or []
+        cards.append({
+            "time": datetime.now().strftime("%m-%d %H:%M"),
+            "media_name": media["media_name"],
+            "media_type": media["media_type"],
+            "media_genres": media["media_genres"],
+            "media_rating": media["media_rating"],
+            "tv_season": media.get("tv_season"),
+            "tv_episode": media.get("tv_episode"),
+            "poster": media.get("media_poster"),
+            "backdrop": media.get("media_backdrop"),
+            "tmdb_url": media.get("media_tmdburl", ""),
+            "channels": " / ".join(sent_channels),
+        })
+        self.save_data("recent_cards", cards[-5:])
+
     # ── 播放链接构建 ──────────────────────────────────────────
 
     def _build_play_url(self, tmdb_id, imdb_id, media_name, is_episode, tv_season, tv_episode) -> str:
@@ -455,10 +503,8 @@ class AWEmbyPush(_PluginBase):
                     "chat_id": chat_id, "text": caption, "parse_mode": "HTML",
                 }, timeout=15, proxies=self._proxies)
             logger.info("AWEmbyPush Telegram 发送成功")
-            self._log(media.get("media_name", ""), "Telegram", "成功")
         except Exception as e:
             logger.error(f"AWEmbyPush Telegram 发送失败：{e}")
-            self._log(media.get("media_name", ""), "Telegram", "失败", str(e))
     # ── 企业微信 ──────────────────────────────────────────────
 
     def _get_wx_token(self) -> Optional[str]:
@@ -558,13 +604,10 @@ class AWEmbyPush(_PluginBase):
             data = res.json()
             if data.get("errcode", 0) == 0:
                 logger.info("AWEmbyPush 企业微信发送成功")
-                self._log(media.get("media_name", ""), "企业微信", "成功")
             else:
                 logger.error(f"AWEmbyPush 企业微信发送失败：{data}")
-                self._log(media.get("media_name", ""), "企业微信", "失败", str(data))
         except Exception as e:
             logger.error(f"AWEmbyPush 企业微信发送异常：{e}")
-            self._log(media.get("media_name", ""), "企业微信", "失败", str(e))
 
     # ── Bark ─────────────────────────────────────────────────
 
@@ -601,10 +644,7 @@ class AWEmbyPush(_PluginBase):
                                 timeout=15, proxies=self._proxies)
             if res.status_code == 200:
                 logger.info("AWEmbyPush Bark 发送成功")
-                self._log(media.get("media_name", ""), "Bark", "成功")
             else:
                 logger.error(f"AWEmbyPush Bark 发送失败：{res.status_code} {res.text}")
-                self._log(media.get("media_name", ""), "Bark", "失败", f"{res.status_code}")
         except Exception as e:
             logger.error(f"AWEmbyPush Bark 发送异常：{e}")
-            self._log(media.get("media_name", ""), "Bark", "失败", str(e))
