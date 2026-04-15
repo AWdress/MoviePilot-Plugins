@@ -1,5 +1,6 @@
 ﻿#!/usr/bin/python3
 # -*- coding: UTF-8 -*-
+import json
 import requests
 import traceback
 import threading
@@ -149,7 +150,7 @@ class AWEmbyPush(_PluginBase):
     plugin_name = "AWEmbyPush"
     plugin_desc = "原项目AWEmbyPush移植，监听 Emby/Jellyfin Webhook 入库事件，通过 Telegram / 企业微信 / Bark 发送精美媒体通知。支持TMDB元数据增强、剧集合并推送、消息去重。"
     plugin_icon = "https://raw.githubusercontent.com/walkxcode/dashboard-icons/main/png/emby.png"
-    plugin_version = "2.0.0"
+    plugin_version = "1.1.0"
     plugin_author = "AWdress"
     author_url = "https://github.com/AWdress/MoviePilot-Plugins"
     plugin_config_prefix = "awembypush_"
@@ -200,8 +201,8 @@ class AWEmbyPush(_PluginBase):
         self._watch_link_type = config.get("watch_link_type", "server")
         self._emby_server_url = config.get("emby_server_url", "").rstrip("/")
         self._enable_tmdb = config.get("enable_tmdb", True)
-        self._dedup_window = int(config.get("dedup_window", 60))
-        self._episode_cache_timeout = int(config.get("episode_cache_timeout", 30))
+        self._dedup_window = int(config.get("dedup_window") or 60)
+        self._episode_cache_timeout = int(config.get("episode_cache_timeout") or 30)
         self._episode_cache = _EpisodeCache(self._send_all_channels)
         self._episode_cache.CACHE_TIMEOUT = self._episode_cache_timeout
 
@@ -257,7 +258,86 @@ class AWEmbyPush(_PluginBase):
         return []
 
     def get_api(self) -> List[Dict[str, Any]]:
-        return []
+        return [{
+            "path": "/webhook",
+            "endpoint": self._api_webhook,
+            "methods": ["POST"],
+            "summary": "AWEmbyPush Webhook",
+            "description": "接收 Emby/Jellyfin Webhook 回调（支持 application/json）"
+        }]
+
+    def _parse_emby_json(self, message: dict) -> Optional[WebhookEventInfo]:
+        """解析 Emby JSON 格式的 Webhook 报文，构建 WebhookEventInfo"""
+        event_type = message.get("Event")
+        if not event_type:
+            return None
+        event_info = WebhookEventInfo(event=event_type, channel="emby")
+        item = message.get("Item")
+        if item:
+            item_type_raw = item.get("Type")
+            if item_type_raw in ("Episode", "Series", "Season"):
+                event_info.item_type = "TV"
+                series_name = item.get("SeriesName") or item.get("Name") or ""
+                s = item.get("ParentIndexNumber")
+                e = item.get("IndexNumber")
+                if series_name and s and e:
+                    event_info.item_name = f"{series_name} S{s}E{e} {item.get('Name', '')}"
+                elif series_name:
+                    event_info.item_name = f"{series_name} {item.get('Name', '')}"
+                else:
+                    event_info.item_name = item.get("Name")
+                event_info.item_id = item.get("SeriesId") or item.get("Id")
+                event_info.season_id = str(s) if s else None
+                event_info.episode_id = str(e) if e else None
+            elif item_type_raw == "Audio":
+                event_info.item_type = "AUD"
+                event_info.item_name = item.get("Album") or item.get("Name")
+                event_info.item_id = item.get("AlbumId") or item.get("Id")
+            else:
+                event_info.item_type = "MOV"
+                year = item.get("ProductionYear")
+                name = item.get("Name", "")
+                event_info.item_name = f"{name} ({year})" if year else name
+                event_info.item_id = item.get("Id")
+            event_info.item_path = item.get("Path")
+            event_info.tmdb_id = item.get("ProviderIds", {}).get("Tmdb")
+            overview = item.get("Overview") or ""
+            event_info.overview = overview[:100] + "..." if len(overview) > 100 else overview
+        if message.get("Session"):
+            event_info.ip = message["Session"].get("RemoteEndPoint")
+            event_info.device_name = message["Session"].get("DeviceName")
+            event_info.client = message["Session"].get("Client")
+        if message.get("User"):
+            event_info.user_name = message["User"].get("Name")
+        return event_info
+
+    async def _api_webhook(self, request: Any):
+        """独立 API 端点：接收 Emby/Jellyfin Webhook（application/json）"""
+        try:
+            body = await request.body()
+            message = json.loads(body) if body else {}
+        except Exception as e:
+            logger.warning(f"AWEmbyPush API 解析请求体失败：{e}")
+            return {"success": False, "message": str(e)}
+        if not message:
+            return {"success": False, "message": "空请求"}
+        logger.debug(f"AWEmbyPush API 收到 webhook：{message.get('Event')}")
+        event_info = self._parse_emby_json(message)
+        if not event_info:
+            return {"success": True, "message": "无法识别的事件"}
+        if not self._enabled:
+            return {"success": True, "message": "插件未启用"}
+        try:
+            if event_info.event in ("system.webhooktest", "system.notificationtest"):
+                self._send_test_notification(event_info)
+            elif event_info.event in ("library.new", "ItemAdded"):
+                if event_info.item_type in ("MOV", "TV", "SHOW", "Episode", "Movie"):
+                    if not self._check_dedup(event_info):
+                        self._dispatch(event_info)
+        except Exception as e:
+            logger.error(f"AWEmbyPush API 处理事件失败：{e}\n{traceback.format_exc()}")
+            return {"success": False, "message": str(e)}
+        return {"success": True}
 
     def stop_service(self):
         pass
@@ -693,7 +773,7 @@ class AWEmbyPush(_PluginBase):
                     {'component': 'VCol', 'props': {'cols': 12}, 'content': [
                         {'component': 'VAlert', 'props': {
                             'type': 'info', 'variant': 'tonal',
-                            'text': '监听 Emby/Jellyfin Webhook 入库事件，支持 TMDB 元数据增强（类型/演员/评分）、剧集合并推送、消息去重。需在媒体服务器配置 Webhook 回调：/api/v1/webhook?token=API_TOKEN（3001端口）。Telegram / 企业微信留空自动使用 MP 内置配置。'
+                            'text': '监听 Emby/Jellyfin Webhook 入库事件，支持 TMDB 元数据增强（类型/演员/评分）、剧集合并推送、消息去重。Webhook 回调地址二选一：① 插件专用端点（推荐，支持 application/json）：/api/v1/plugin/AWEmbyPush/webhook ② MP 内置端点（需选 multipart/form-data）：/api/v1/webhook?token=API_TOKEN。Telegram / 企业微信留空自动使用 MP 内置配置。'
                         }}]}]},
                 {'component': 'VRow', 'content': [
                     {'component': 'VCol', 'props': {'cols': 12, 'md': 6}, 'content': [
