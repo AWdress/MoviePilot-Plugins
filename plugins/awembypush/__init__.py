@@ -90,13 +90,13 @@ class _EpisodeCache:
             if media.get("episode_id") in existing_eps:
                 logger.info(
                     f"AWEmbyPush 剧集已在缓存中：{media.get('item_name')} "
-                    f"S{media.get('season_id')}E{media.get('episode_id')}"
+                    f"第{media.get('season_id')}季 第{media.get('episode_id')}集"
                 )
             else:
                 self.cache[ck].append(media)
                 logger.info(
                     f"AWEmbyPush 缓存剧集：{media.get('item_name')} "
-                    f"S{media.get('season_id')}E{media.get('episode_id')} "
+                    f"第{media.get('season_id')}季 第{media.get('episode_id')}集 "
                     f"(当前缓存 {len(self.cache[ck])} 集)"
                 )
             timer = threading.Timer(self.CACHE_TIMEOUT, self._flush, args=[ck])
@@ -150,7 +150,7 @@ class AWEmbyPush(_PluginBase):
     plugin_name = "AWEmbyPush"
     plugin_desc = "原项目AWEmbyPush移植，监听 Emby/Jellyfin Webhook 入库事件，通过 Telegram / 企业微信 / Bark 发送精美媒体通知。支持TMDB元数据增强、剧集合并推送、消息去重。"
     plugin_icon = "https://raw.githubusercontent.com/walkxcode/dashboard-icons/main/png/emby.png"
-    plugin_version = "1.3.0"
+    plugin_version = "1.3.1"
     plugin_author = "AWdress"
     author_url = "https://github.com/AWdress/MoviePilot-Plugins"
     plugin_config_prefix = "awembypush_"
@@ -695,7 +695,10 @@ class AWEmbyPush(_PluginBase):
                 payload["text"] = caption
                 resp = requests.post(f"{api}/bot{token}/sendMessage", json=payload,
                                      timeout=15, proxies=self._proxies)
-            result = resp.json() if resp else {}
+            if resp.status_code != 200:
+                logger.error(f"AWEmbyPush Telegram HTTP {resp.status_code}：{resp.text[:500]}")
+                return
+            result = resp.json()
             if result.get("ok"):
                 logger.info(f"AWEmbyPush Telegram 发送成功：{media['item_name']}")
             else:
