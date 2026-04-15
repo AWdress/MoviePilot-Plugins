@@ -150,7 +150,7 @@ class AWEmbyPush(_PluginBase):
     plugin_name = "AWEmbyPush"
     plugin_desc = "原项目AWEmbyPush移植，监听 Emby/Jellyfin Webhook 入库事件，通过 Telegram / 企业微信 / Bark 发送精美媒体通知。支持TMDB元数据增强、剧集合并推送、消息去重。"
     plugin_icon = "https://raw.githubusercontent.com/walkxcode/dashboard-icons/main/png/emby.png"
-    plugin_version = "1.3.3"
+    plugin_version = "1.3.4"
     plugin_author = "AWdress"
     author_url = "https://github.com/AWdress/MoviePilot-Plugins"
     plugin_config_prefix = "awembypush_"
@@ -453,6 +453,8 @@ class AWEmbyPush(_PluginBase):
                 self._fetch_movie_metadata(tmdb_id, meta)
         except Exception as e:
             logger.warning(f"AWEmbyPush TMDB 元数据获取失败：{e}")
+        has_fields = [k for k, v in meta.items() if v]
+        logger.info(f"AWEmbyPush TMDB 元数据 (ID={tmdb_id})：{', '.join(has_fields) if has_fields else '无数据'}")
         return meta
 
     def _fetch_movie_metadata(self, tmdb_id: str, meta: dict):
@@ -567,7 +569,10 @@ class AWEmbyPush(_PluginBase):
         display_name = server_name or (info.channel.upper() if info.channel else "MediaServer")
         # 当 Emby 未提供 tmdb_id 时，按名称搜索 TMDB
         if not info.tmdb_id and self._enable_tmdb:
+            logger.info(f"AWEmbyPush Emby 未提供 TMDB ID，搜索：{info.item_name}")
             info.tmdb_id = self._search_tmdb_id(info.item_name or "", info.item_type or "", premiere_year)
+        elif info.tmdb_id:
+            logger.info(f"AWEmbyPush 使用 Emby 提供的 TMDB ID：{info.tmdb_id}（{info.item_name}）")
         play_url = self._build_play_url(info)
         tmdb_url = (
             f"https://www.themoviedb.org/{'tv' if is_ep else 'movie'}/{info.tmdb_id}?language=zh-CN"
@@ -575,15 +580,19 @@ class AWEmbyPush(_PluginBase):
         )
         tmdb_meta = self._fetch_tmdb_metadata(info.tmdb_id, is_ep, info.season_id, info.episode_id)
         overview = info.overview or tmdb_meta.get("overview_tmdb", "") or ""
+        # 图片降级：TMDB 剧照 > TMDB 背景 > Emby 图片 > TMDB 海报
+        emby_image = ""
+        if self._emby_server_url and info.item_id:
+            emby_image = f"{self._emby_server_url}/Items/{info.item_id}/Images/Primary"
         if is_ep:
             image_url = (
                 tmdb_meta.get("still_url") or tmdb_meta.get("backdrop_url")
-                or info.image_url or tmdb_meta.get("poster_url") or ""
+                or tmdb_meta.get("poster_url") or emby_image or info.image_url or ""
             )
         else:
             image_url = (
-                tmdb_meta.get("backdrop_url") or info.image_url
-                or tmdb_meta.get("poster_url") or ""
+                tmdb_meta.get("backdrop_url") or tmdb_meta.get("poster_url")
+                or emby_image or info.image_url or ""
             )
         media = {
             "item_name": info.item_name or "", "item_type": info.item_type or "",
