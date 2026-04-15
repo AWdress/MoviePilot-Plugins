@@ -11,11 +11,9 @@ from typing import Any, List, Dict, Tuple, Optional
 from starlette.requests import Request
 
 from app.core.config import settings
-from app.core.event import eventmanager, Event
 from app.log import logger
 from app.plugins import _PluginBase
 from app.schemas import WebhookEventInfo
-from app.schemas.types import EventType
 
 
 def _truncate(text: str, limit: int) -> str:
@@ -152,7 +150,7 @@ class AWEmbyPush(_PluginBase):
     plugin_name = "AWEmbyPush"
     plugin_desc = "原项目AWEmbyPush移植，监听 Emby/Jellyfin Webhook 入库事件，通过 Telegram / 企业微信 / Bark 发送精美媒体通知。支持TMDB元数据增强、剧集合并推送、消息去重。"
     plugin_icon = "https://raw.githubusercontent.com/walkxcode/dashboard-icons/main/png/emby.png"
-    plugin_version = "1.1.1"
+    plugin_version = "1.2.0"
     plugin_author = "AWdress"
     author_url = "https://github.com/AWdress/MoviePilot-Plugins"
     plugin_config_prefix = "awembypush_"
@@ -210,11 +208,11 @@ class AWEmbyPush(_PluginBase):
 
     @property
     def _effective_tg_token(self) -> str:
-        return self._tg_bot_token or (getattr(settings, 'TELEGRAM_TOKEN', None) or "")
+        return self._tg_bot_token
 
     @property
     def _effective_tg_chat_id(self) -> str:
-        return self._tg_chat_id or (getattr(settings, 'TELEGRAM_CHAT_ID', None) or "")
+        return self._tg_chat_id
 
     @property
     def _effective_tg_api_host(self) -> str:
@@ -222,19 +220,19 @@ class AWEmbyPush(_PluginBase):
 
     @property
     def _effective_wx_corp_id(self) -> str:
-        return self._wx_corp_id or (getattr(settings, 'WECHAT_CORPID', None) or "")
+        return self._wx_corp_id
 
     @property
     def _effective_wx_corp_secret(self) -> str:
-        return self._wx_corp_secret or (getattr(settings, 'WECHAT_APP_SECRET', None) or "")
+        return self._wx_corp_secret
 
     @property
     def _effective_wx_agent_id(self) -> str:
-        return self._wx_agent_id or (getattr(settings, 'WECHAT_APP_ID', None) or "")
+        return self._wx_agent_id
 
     @property
     def _effective_wx_proxy_url(self) -> str:
-        return self._wx_proxy_url or (getattr(settings, 'WECHAT_PROXY', None) or "https://qyapi.weixin.qq.com")
+        return self._wx_proxy_url or "https://qyapi.weixin.qq.com"
 
     @property
     def _proxies(self) -> Optional[dict]:
@@ -454,27 +452,6 @@ class AWEmbyPush(_PluginBase):
                 return True
             self._message_fingerprints[fingerprint] = now
         return False
-
-    @eventmanager.register(EventType.WebhookMessage)
-    def on_webhook_message(self, event: Event):
-        if not self._enabled:
-            return
-        try:
-            event_info: WebhookEventInfo = event.event_data
-            if not event_info:
-                return
-            if event_info.event in ("system.webhooktest", "system.notificationtest"):
-                self._send_test_notification(event_info)
-                return
-            if event_info.event not in ("library.new", "ItemAdded"):
-                return
-            if event_info.item_type not in ("MOV", "TV", "SHOW", "Episode", "Movie"):
-                return
-            if self._check_dedup(event_info):
-                return
-            self._dispatch(event_info)
-        except Exception as e:
-            logger.error(f"AWEmbyPush 处理 Webhook 事件失败：{e}\n{traceback.format_exc()}")
 
     def _send_test_notification(self, info: WebhookEventInfo):
         server_name = info.channel.upper() if info.channel else "MediaServer"
@@ -780,7 +757,7 @@ class AWEmbyPush(_PluginBase):
                     {'component': 'VCol', 'props': {'cols': 12}, 'content': [
                         {'component': 'VAlert', 'props': {
                             'type': 'info', 'variant': 'tonal',
-                            'text': '监听 Emby/Jellyfin Webhook 入库事件，支持 TMDB 元数据增强（类型/演员/评分）、剧集合并推送、消息去重。Webhook 回调地址二选一：① 插件专用端点（推荐，支持 application/json）：/api/v1/plugin/AWEmbyPush/webhook ② MP 内置端点（需选 multipart/form-data）：/api/v1/webhook?token=API_TOKEN。Telegram / 企业微信留空自动使用 MP 内置配置。'
+                            'text': '监听 Emby/Jellyfin Webhook 入库事件，支持 TMDB 元数据增强（类型/演员/评分）、剧集合并推送、消息去重。在 Emby/Jellyfin 中配置 Webhook 地址：http://MP地址:3001/api/v1/plugin/AWEmbyPush/webhook?apikey=API_TOKEN，请求内容类型选 application/json。'
                         }}]}]},
                 {'component': 'VRow', 'content': [
                     {'component': 'VCol', 'props': {'cols': 12, 'md': 6}, 'content': [
@@ -796,25 +773,25 @@ class AWEmbyPush(_PluginBase):
                 ]},
                 {'component': 'VRow', 'content': [
                     {'component': 'VCol', 'props': {'cols': 12}, 'content': [
-                        {'component': 'VAlert', 'props': {'type': 'info', 'variant': 'tonal', 'text': '── Telegram 配置（留空使用 MP 内置）──'}}]}]},
+                        {'component': 'VAlert', 'props': {'type': 'info', 'variant': 'tonal', 'text': '── Telegram 配置 ──'}}]}]},
                 {'component': 'VRow', 'content': [
                     {'component': 'VCol', 'props': {'cols': 12, 'md': 4}, 'content': [
-                        {'component': 'VTextField', 'props': {'model': 'tg_bot_token', 'label': 'Bot Token', 'placeholder': '留空使用 MP 内置'}}]},
+                        {'component': 'VTextField', 'props': {'model': 'tg_bot_token', 'label': 'Bot Token', 'placeholder': '必填'}}]},
                     {'component': 'VCol', 'props': {'cols': 12, 'md': 4}, 'content': [
-                        {'component': 'VTextField', 'props': {'model': 'tg_chat_id', 'label': 'Chat ID', 'placeholder': '留空使用 MP 内置'}}]},
+                        {'component': 'VTextField', 'props': {'model': 'tg_chat_id', 'label': 'Chat ID', 'placeholder': '必填'}}]},
                     {'component': 'VCol', 'props': {'cols': 12, 'md': 4}, 'content': [
                         {'component': 'VTextField', 'props': {'model': 'tg_api_host', 'label': 'API Host', 'placeholder': 'https://api.telegram.org'}}]},
                 ]},
                 {'component': 'VRow', 'content': [
                     {'component': 'VCol', 'props': {'cols': 12}, 'content': [
-                        {'component': 'VAlert', 'props': {'type': 'info', 'variant': 'tonal', 'text': '── 企业微信配置（留空使用 MP 内置）──'}}]}]},
+                        {'component': 'VAlert', 'props': {'type': 'info', 'variant': 'tonal', 'text': '── 企业微信配置 ──'}}]}]},
                 {'component': 'VRow', 'content': [
                     {'component': 'VCol', 'props': {'cols': 12, 'md': 3}, 'content': [
-                        {'component': 'VTextField', 'props': {'model': 'wx_corp_id', 'label': 'Corp ID', 'placeholder': '留空使用 MP 内置'}}]},
+                        {'component': 'VTextField', 'props': {'model': 'wx_corp_id', 'label': 'Corp ID'}}]},
                     {'component': 'VCol', 'props': {'cols': 12, 'md': 3}, 'content': [
-                        {'component': 'VTextField', 'props': {'model': 'wx_corp_secret', 'label': 'Corp Secret', 'placeholder': '留空使用 MP 内置'}}]},
+                        {'component': 'VTextField', 'props': {'model': 'wx_corp_secret', 'label': 'Corp Secret'}}]},
                     {'component': 'VCol', 'props': {'cols': 12, 'md': 3}, 'content': [
-                        {'component': 'VTextField', 'props': {'model': 'wx_agent_id', 'label': 'Agent ID', 'placeholder': '留空使用 MP 内置'}}]},
+                        {'component': 'VTextField', 'props': {'model': 'wx_agent_id', 'label': 'Agent ID'}}]},
                     {'component': 'VCol', 'props': {'cols': 12, 'md': 3}, 'content': [
                         {'component': 'VSelect', 'props': {
                             'model': 'wx_msg_type', 'label': '消息类型',
@@ -827,7 +804,7 @@ class AWEmbyPush(_PluginBase):
                     {'component': 'VCol', 'props': {'cols': 12, 'md': 6}, 'content': [
                         {'component': 'VTextField', 'props': {'model': 'wx_user_id', 'label': '接收用户', 'placeholder': '@all'}}]},
                     {'component': 'VCol', 'props': {'cols': 12, 'md': 6}, 'content': [
-                        {'component': 'VTextField', 'props': {'model': 'wx_proxy_url', 'label': '代理地址', 'placeholder': '留空使用 MP 内置'}}]},
+                        {'component': 'VTextField', 'props': {'model': 'wx_proxy_url', 'label': '代理地址', 'placeholder': 'https://qyapi.weixin.qq.com'}}]},
                 ]},
                 {'component': 'VRow', 'content': [
                     {'component': 'VCol', 'props': {'cols': 12}, 'content': [

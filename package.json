@@ -2,12 +2,13 @@
   "AWEmbyPush": {
     "name": "AWEmbyPush",
     "description": "入库后通过 Telegram / 企业微信 / Bark 发送精美媒体通知，样式与 AWEmbyPush 一致。",
-    "version": "1.1.1",
+    "version": "1.2.0",
     "v2": true,
     "icon": "https://raw.githubusercontent.com/walkxcode/dashboard-icons/main/png/emby.png",
     "author": "AWdress",
     "level": 1,
     "history": {
+      "v1.2.0": "移除 MP 内置 Webhook 监听和 settings 兑底，仅保留插件独立 API 端点",
       "v1.1.1": "修复 API 端点 request 参数类型导致 422 错误",
       "v1.1.0": "新增独立 API 端点，支持 Emby 以 application/json 格式发送 Webhook",
       "v1.0.1": "修复 int() 空值崩溃、同步版本号",
