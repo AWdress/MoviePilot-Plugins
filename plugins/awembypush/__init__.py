@@ -90,13 +90,13 @@ class _EpisodeCache:
             if media.get("episode_id") in existing_eps:
                 logger.info(
                     f"AWEmbyPush 剧集已在缓存中：{media.get('item_name')} "
-                    f"第{media.get('season_id')}季 第{media.get('episode_id')}集"
+                    f"{media.get('episode_text') or ''}"
                 )
             else:
                 self.cache[ck].append(media)
                 logger.info(
                     f"AWEmbyPush 缓存剧集：{media.get('item_name')} "
-                    f"第{media.get('season_id')}季 第{media.get('episode_id')}集 "
+                    f"{media.get('episode_text') or ''} "
                     f"(当前缓存 {len(self.cache[ck])} 集)"
                 )
             timer = threading.Timer(self.CACHE_TIMEOUT, self._flush, args=[ck])
@@ -150,7 +150,7 @@ class AWEmbyPush(_PluginBase):
     plugin_name = "AWEmbyPush"
     plugin_desc = "原项目AWEmbyPush移植，监听 Emby/Jellyfin Webhook 入库事件，通过 Telegram / 企业微信 / Bark 发送精美媒体通知。支持TMDB元数据增强、剧集合并推送、消息去重。"
     plugin_icon = "https://raw.githubusercontent.com/walkxcode/dashboard-icons/main/png/emby.png"
-    plugin_version = "1.3.1"
+    plugin_version = "1.3.2"
     plugin_author = "AWdress"
     author_url = "https://github.com/AWdress/MoviePilot-Plugins"
     plugin_config_prefix = "awembypush_"
@@ -384,6 +384,10 @@ class AWEmbyPush(_PluginBase):
                 self._send_test_notification(event_info, server_name=server_name)
             elif event_info.event in ("library.new", "ItemAdded"):
                 if event_info.item_type in ("MOV", "TV", "SHOW", "Episode", "Movie"):
+                    # 跳过 Series/Season 级别事件（无季集信息），只处理 Episode 级别
+                    if event_info.item_type in ("TV", "SHOW", "Episode") and not event_info.season_id and not event_info.episode_id:
+                        logger.debug(f"AWEmbyPush 跳过无季集信息的 TV 事件：{event_info.item_name}")
+                        return {"success": True, "message": "skipped series/season level event"}
                     if not self._check_dedup(event_info):
                         self._dispatch(event_info, server_name=server_name, premiere_year=premiere_year)
         except Exception as e:
@@ -554,8 +558,8 @@ class AWEmbyPush(_PluginBase):
         status_text = "新剧速递" if is_ep else "新片速递"
         episode_text = ""
         if is_ep:
-            s = info.season_id or ""
-            e = info.episode_id or ""
+            s = str(info.season_id) if info.season_id else ""
+            e = str(info.episode_id) if info.episode_id else ""
             if s and e:
                 episode_text = f"第{s}季：第{e}集"
             elif s:
@@ -671,12 +675,17 @@ class AWEmbyPush(_PluginBase):
         if media.get("overview"):
             caption += f"📝 内容简介：\n<blockquote>{_truncate(media['overview'], 150)}</blockquote>\n\n"
         caption += "─────────────────────"
-        # 构建 InlineKeyboard 按钮
+        # 构建 InlineKeyboard 按钮（Telegram 仅支持 http/https URL）
         buttons = []
-        if self._enable_watch_link and media.get("play_url"):
-            buttons.append({"text": "▶️ 立即观看", "url": media["play_url"]})
-        if media.get("tmdb_url"):
-            buttons.append({"text": "ℹ️ 了解更多", "url": media["tmdb_url"]})
+        play_url = media.get("play_url", "")
+        tmdb_url = media.get("tmdb_url", "")
+        if self._enable_watch_link and play_url:
+            if play_url.startswith(("http://", "https://")):
+                buttons.append({"text": "▶️ 立即观看", "url": play_url})
+            else:
+                caption += f"\n\n▶️ <a href=\"{play_url}\">立即观看</a>"
+        if tmdb_url:
+            buttons.append({"text": "ℹ️ 了解更多", "url": tmdb_url})
         reply_markup = {"inline_keyboard": [buttons]} if buttons else None
         photo = media.get("image_url", "")
         try:
