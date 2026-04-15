@@ -531,6 +531,9 @@ class AWEmbyPush(_PluginBase):
                 f"微信 Corp ID: {'有' if self._effective_wx_corp_id else '无'}, "
                 f"Bark Keys: {'有' if self._bark_keys else '无'}）"
             )
+        # 测试通知不记录到卡片
+        if media.get("status_text") == "测试通知":
+            return
         cards: List[dict] = self.get_data("recent_cards") or []
         cards.append({
             "time": datetime.now().strftime("%m-%d %H:%M"),
