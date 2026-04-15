@@ -150,7 +150,7 @@ class AWEmbyPush(_PluginBase):
     plugin_name = "AWEmbyPush"
     plugin_desc = "原项目AWEmbyPush移植，监听 Emby/Jellyfin Webhook 入库事件，通过 Telegram / 企业微信 / Bark 发送精美媒体通知。支持TMDB元数据增强、剧集合并推送、消息去重。"
     plugin_icon = "https://raw.githubusercontent.com/walkxcode/dashboard-icons/main/png/emby.png"
-    plugin_version = "1.3.2"
+    plugin_version = "1.3.3"
     plugin_author = "AWdress"
     author_url = "https://github.com/AWdress/MoviePilot-Plugins"
     plugin_config_prefix = "awembypush_"
@@ -737,9 +737,11 @@ class AWEmbyPush(_PluginBase):
         image_url = media.get("image_url", "")
         play_url = media.get("play_url", "")
         tmdb_url = media.get("tmdb_url", "")
-        jump_url = play_url if (self._enable_watch_link and play_url) else tmdb_url
-        if not jump_url:
-            jump_url = "https://www.themoviedb.org/"
+        # 企业微信只支持 http/https URL
+        safe_play_url = play_url if play_url.startswith(("http://", "https://")) else ""
+        safe_tmdb_url = tmdb_url if tmdb_url.startswith(("http://", "https://")) else ""
+        jump_url = (safe_play_url if (self._enable_watch_link and safe_play_url)
+                    else safe_tmdb_url or "https://www.themoviedb.org/")
         agent_id = self._effective_wx_agent_id
         agent_id_val = int(agent_id) if str(agent_id).isdigit() else agent_id
         episode_text = media.get("episode_text", "") or "新更上线"
@@ -766,9 +768,9 @@ class AWEmbyPush(_PluginBase):
                     "card_image": {"url": image_url, "aspect_ratio": 2.25},
                     "vertical_content_list": vertical_content,
                     "jump_list": (
-                        [{"type": 1, "url": play_url, "title": "▶️ 立即观看"},
-                         {"type": 1, "url": tmdb_url, "title": "ℹ️ 了解更多"}]
-                        if (self._enable_watch_link and play_url and tmdb_url) else
+                        [{"type": 1, "url": safe_play_url, "title": "▶️ 立即观看"},
+                         {"type": 1, "url": safe_tmdb_url, "title": "ℹ️ 了解更多"}]
+                        if (self._enable_watch_link and safe_play_url and safe_tmdb_url) else
                         [{"type": 1, "url": jump_url, "title": "ℹ️ 了解更多"}]
                     ),
                     "card_action": {"type": 1, "url": jump_url},
@@ -821,12 +823,19 @@ class AWEmbyPush(_PluginBase):
                       else media.get("tmdb_url", ""))
         server_icon = f"https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/{(media.get('channel') or 'emby').lower()}.png"
         keys = [k.strip() for k in self._bark_keys.split(",") if k.strip()]
+        # 选取缩略图：剧集优先 still > backdrop > poster
+        image_url = media.get("image_url") or media.get("poster_url") or ""
+        # 分组：按剧集/电影分类
+        group = "新剧速递" if media.get("is_ep") else "新片速递"
         for key in keys:
             payload = {
                 "title": f"{media['server_name']} | {media['status_text']}\n【{media['item_name']}】",
                 "body": body or "新内容已入库",
                 "icon": server_icon, "url": url_target, "device_key": key,
+                "group": group,
             }
+            if image_url:
+                payload["image"] = image_url
             try:
                 res = requests.post(f"{self._bark_server}/push", json=payload,
                                     timeout=15, proxies=self._proxies)
