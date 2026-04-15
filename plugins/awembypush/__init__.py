@@ -135,12 +135,12 @@ class _EpisodeCache:
         merged["episode_range"] = ep_range
         merged["episode_count"] = len(episodes)
         s = merged.get("season_id", "")
-        merged["episode_text"] = f"第{s}季 第{ep_range}集（共{len(episodes)}集）"
+        merged["episode_text"] = f"第{s}季：第{ep_range}集（共{len(episodes)}集）"
         unsent = [ep for ep in episodes if not self._is_recently_sent(self._send_key(ep))]
         if not unsent:
-            logger.info(f"AWEmbyPush 发送层拦截重复推送：{merged.get('item_name')} 第{s}季 第{ep_range}集（全部已发送过）")
+            logger.info(f"AWEmbyPush 发送层拦截重复推送：{merged.get('item_name')} 第{s}季：第{ep_range}集（全部已发送过）")
             return
-        logger.info(f"AWEmbyPush 合并发送 {len(episodes)} 集：{merged.get('item_name')} 第{s}季 第{ep_range}集")
+        logger.info(f"AWEmbyPush 合并发送 {len(episodes)} 集：{merged.get('item_name')} 第{s}季：第{ep_range}集")
         self._send(merged)
         for ep in episodes:
             self._record_sent(self._send_key(ep))
@@ -150,7 +150,7 @@ class AWEmbyPush(_PluginBase):
     plugin_name = "AWEmbyPush"
     plugin_desc = "原项目AWEmbyPush移植，监听 Emby/Jellyfin Webhook 入库事件，通过 Telegram / 企业微信 / Bark 发送精美媒体通知。支持TMDB元数据增强、剧集合并推送、消息去重。"
     plugin_icon = "https://raw.githubusercontent.com/walkxcode/dashboard-icons/main/png/emby.png"
-    plugin_version = "1.2.1"
+    plugin_version = "1.3.0"
     plugin_author = "AWdress"
     author_url = "https://github.com/AWdress/MoviePilot-Plugins"
     plugin_config_prefix = "awembypush_"
@@ -266,8 +266,46 @@ class AWEmbyPush(_PluginBase):
             "description": "接收 Emby/Jellyfin Webhook 回调（支持 application/json）"
         }]
 
+    def _preprocess_jellyfin(self, message: dict) -> dict:
+        """将 Jellyfin Webhook 格式转换为 Emby 格式"""
+        if "NotificationType" not in message:
+            return message
+        ntype = message.get("NotificationType", "")
+        if ntype != "ItemAdded" or message.get("ItemType") not in ("Movie", "Episode"):
+            if ntype == "NotificationTest":
+                return {
+                    "Event": "system.notificationtest",
+                    "Server": {"Name": message.get("ServerName", ""), "Type": "Jellyfin"},
+                }
+            return {}
+        result = {
+            "Event": "library.new",
+            "Item": {"ProviderIds": {}},
+            "Server": {
+                "Name": message.get("ServerName", ""),
+                "Type": "Jellyfin",
+                "Url": message.get("ServerUrl", ""),
+            },
+        }
+        item = result["Item"]
+        if message.get("ItemType") == "Movie":
+            item["Type"] = "Movie"
+            item["Name"] = message.get("Name", "")
+        else:
+            item["Type"] = "Episode"
+            item["SeriesName"] = message.get("SeriesName", "")
+            item["IndexNumber"] = message.get("EpisodeNumber")
+            item["ParentIndexNumber"] = message.get("SeasonNumber")
+        item["Id"] = message.get("ItemId", "")
+        item["PremiereDate"] = str(message.get("Year", ""))
+        if message.get("Provider_tmdb"):
+            item["ProviderIds"]["Tmdb"] = message["Provider_tmdb"]
+        if message.get("Provider_tvdb"):
+            item["ProviderIds"]["Tvdb"] = message["Provider_tvdb"]
+        return result
+
     def _parse_emby_json(self, message: dict) -> Optional[tuple]:
-        """解析 Emby JSON 格式的 Webhook 报文，返回 (WebhookEventInfo, server_name)"""
+        """解析 Emby JSON 格式的 Webhook 报文，返回 (WebhookEventInfo, server_name, premiere_year)"""
         event_type = message.get("Event")
         if not event_type:
             return None
@@ -277,6 +315,7 @@ class AWEmbyPush(_PluginBase):
         server_obj = message.get("Server")
         if server_obj and isinstance(server_obj, dict):
             server_name = server_obj.get("Name") or ""
+        premiere_year = ""
         item = message.get("Item")
         if item:
             item_type_raw = item.get("Type")
@@ -300,13 +339,25 @@ class AWEmbyPush(_PluginBase):
             event_info.item_path = item.get("Path")
             event_info.tmdb_id = item.get("ProviderIds", {}).get("Tmdb")
             event_info.overview = item.get("Overview") or ""
+            # 提取年份用于 TMDB 搜索
+            premiere = item.get("PremiereDate") or ""
+            if premiere:
+                try:
+                    if premiere.isdigit():
+                        premiere_year = premiere
+                    else:
+                        premiere_year = str(datetime.fromisoformat(
+                            premiere.replace("Z", "+00:00")
+                        ).year)
+                except Exception:
+                    pass
         if message.get("Session"):
             event_info.ip = message["Session"].get("RemoteEndPoint")
             event_info.device_name = message["Session"].get("DeviceName")
             event_info.client = message["Session"].get("Client")
         if message.get("User"):
             event_info.user_name = message["User"].get("Name")
-        return (event_info, server_name)
+        return (event_info, server_name, premiere_year)
 
     async def _api_webhook(self, request: Request):
         """独立 API 端点：接收 Emby/Jellyfin Webhook（application/json）"""
@@ -318,11 +369,14 @@ class AWEmbyPush(_PluginBase):
             return {"success": False, "message": str(e)}
         if not message:
             return {"success": False, "message": "空请求"}
-        logger.debug(f"AWEmbyPush API 收到 webhook：{message.get('Event')}")
+        logger.debug(f"AWEmbyPush API 收到 webhook：{message.get('Event') or message.get('NotificationType')}")
+        message = self._preprocess_jellyfin(message)
+        if not message:
+            return {"success": True, "message": "无法识别的事件"}
         result = self._parse_emby_json(message)
         if not result:
             return {"success": True, "message": "无法识别的事件"}
-        event_info, server_name = result
+        event_info, server_name, premiere_year = result
         if not self._enabled:
             return {"success": True, "message": "插件未启用"}
         try:
@@ -331,7 +385,7 @@ class AWEmbyPush(_PluginBase):
             elif event_info.event in ("library.new", "ItemAdded"):
                 if event_info.item_type in ("MOV", "TV", "SHOW", "Episode", "Movie"):
                     if not self._check_dedup(event_info):
-                        self._dispatch(event_info, server_name=server_name)
+                        self._dispatch(event_info, server_name=server_name, premiere_year=premiere_year)
         except Exception as e:
             logger.error(f"AWEmbyPush API 处理事件失败：{e}\n{traceback.format_exc()}")
             return {"success": False, "message": str(e)}
@@ -359,6 +413,24 @@ class AWEmbyPush(_PluginBase):
         if not path:
             return ""
         return f"https://{self._tmdb_image_domain}/t/p/{size}{path}"
+
+    def _search_tmdb_id(self, name: str, media_type: str, year: str = "") -> str:
+        """当 ProviderIds 无 Tmdb 时，按名称搜索 TMDB 获取 ID"""
+        if not self._tmdb_api_key or not name:
+            return ""
+        search_type = "tv" if media_type in ("TV", "SHOW", "Episode") else "movie"
+        path = f"/search/{search_type}?query={name}&page=1"
+        if year:
+            path += f"&year={year}"
+        data = self._tmdb_request(path)
+        if data and data.get("results"):
+            first = data["results"][0]
+            tmdb_id = str(first.get("id", ""))
+            title = first.get("name") or first.get("title") or name
+            logger.info(f"AWEmbyPush TMDB 搜索到：{title} (ID: {tmdb_id})")
+            return tmdb_id
+        logger.warning(f"AWEmbyPush TMDB 搜索无结果：{name} ({year})")
+        return ""
 
     def _fetch_tmdb_metadata(self, tmdb_id: str, is_ep: bool,
                               season_id: Optional[str] = None,
@@ -414,6 +486,17 @@ class AWEmbyPush(_PluginBase):
         credits = self._tmdb_request(f"/tv/{tmdb_id}/credits")
         if credits and credits.get("cast"):
             meta["cast"] = ", ".join(a["name"] for a in credits["cast"][:5])
+        # 获取季度海报（降级到剧集主海报）
+        if season_id:
+            try:
+                s = int(season_id)
+                season_data = self._tmdb_request(f"/tv/{tmdb_id}/season/{s}")
+                if season_data and season_data.get("poster_path"):
+                    meta["poster_url"] = self._tmdb_image_url(season_data["poster_path"])
+                if season_data and not meta.get("release_date") and season_data.get("air_date"):
+                    meta["release_date"] = season_data["air_date"]
+            except (ValueError, TypeError):
+                pass
         if season_id and episode_id:
             try:
                 s, e = int(season_id), int(episode_id)
@@ -466,7 +549,7 @@ class AWEmbyPush(_PluginBase):
         self._send_all_channels(media)
         logger.info("AWEmbyPush 已响应 Webhook 测试通知")
 
-    def _dispatch(self, info: WebhookEventInfo, server_name: str = ""):
+    def _dispatch(self, info: WebhookEventInfo, server_name: str = "", premiere_year: str = ""):
         is_ep = info.item_type in ("TV", "SHOW", "Episode")
         status_text = "新剧速递" if is_ep else "新片速递"
         episode_text = ""
@@ -474,10 +557,13 @@ class AWEmbyPush(_PluginBase):
             s = info.season_id or ""
             e = info.episode_id or ""
             if s and e:
-                episode_text = f"第{s}季 第{e}集"
+                episode_text = f"第{s}季：第{e}集"
             elif s:
                 episode_text = f"第{s}季"
         display_name = server_name or (info.channel.upper() if info.channel else "MediaServer")
+        # 当 Emby 未提供 tmdb_id 时，按名称搜索 TMDB
+        if not info.tmdb_id and self._enable_tmdb:
+            info.tmdb_id = self._search_tmdb_id(info.item_name or "", info.item_type or "", premiere_year)
         play_url = self._build_play_url(info)
         tmdb_url = (
             f"https://www.themoviedb.org/{'tv' if is_ep else 'movie'}/{info.tmdb_id}?language=zh-CN"
