@@ -134,13 +134,13 @@ class _EpisodeCache:
         merged["episode_merged"] = True
         merged["episode_range"] = ep_range
         merged["episode_count"] = len(episodes)
-        s = str(merged.get("season_id", "")).zfill(2)
-        merged["episode_text"] = f"S{s} 第{ep_range}集（共{len(episodes)}集）"
+        s = merged.get("season_id", "")
+        merged["episode_text"] = f"第{s}季 第{ep_range}集（共{len(episodes)}集）"
         unsent = [ep for ep in episodes if not self._is_recently_sent(self._send_key(ep))]
         if not unsent:
-            logger.info(f"AWEmbyPush 发送层拦截重复推送：{merged.get('item_name')} S{s} 第{ep_range}集（全部已发送过）")
+            logger.info(f"AWEmbyPush 发送层拦截重复推送：{merged.get('item_name')} 第{s}季 第{ep_range}集（全部已发送过）")
             return
-        logger.info(f"AWEmbyPush 合并发送 {len(episodes)} 集：{merged.get('item_name')} S{s} 第{ep_range}集")
+        logger.info(f"AWEmbyPush 合并发送 {len(episodes)} 集：{merged.get('item_name')} 第{s}季 第{ep_range}集")
         self._send(merged)
         for ep in episodes:
             self._record_sent(self._send_key(ep))
@@ -150,7 +150,7 @@ class AWEmbyPush(_PluginBase):
     plugin_name = "AWEmbyPush"
     plugin_desc = "原项目AWEmbyPush移植，监听 Emby/Jellyfin Webhook 入库事件，通过 Telegram / 企业微信 / Bark 发送精美媒体通知。支持TMDB元数据增强、剧集合并推送、消息去重。"
     plugin_icon = "https://raw.githubusercontent.com/walkxcode/dashboard-icons/main/png/emby.png"
-    plugin_version = "1.3.0"
+    plugin_version = "1.2.1"
     plugin_author = "AWdress"
     author_url = "https://github.com/AWdress/MoviePilot-Plugins"
     plugin_config_prefix = "awembypush_"
@@ -474,9 +474,9 @@ class AWEmbyPush(_PluginBase):
             s = info.season_id or ""
             e = info.episode_id or ""
             if s and e:
-                episode_text = f"S{str(s).zfill(2)}E{str(e).zfill(2)}"
+                episode_text = f"第{s}季 第{e}集"
             elif s:
-                episode_text = f"第 {s} 季"
+                episode_text = f"第{s}季"
         display_name = server_name or (info.channel.upper() if info.channel else "MediaServer")
         play_url = self._build_play_url(info)
         tmdb_url = (
