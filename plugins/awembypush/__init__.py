@@ -538,19 +538,24 @@ class AWEmbyPush(_PluginBase):
             self._send_all_channels(media)
 
     def _send_all_channels(self, media: dict):
-        if self._effective_tg_token and self._effective_tg_chat_id:
-            self._send_telegram(media)
-        if self._effective_wx_corp_id and self._effective_wx_corp_secret and self._effective_wx_agent_id:
-            self._send_wechat(media)
-        if self._bark_server and self._bark_keys:
-            self._send_bark(media)
         sent_channels = []
         if self._effective_tg_token and self._effective_tg_chat_id:
+            self._send_telegram(media)
             sent_channels.append("Telegram")
         if self._effective_wx_corp_id and self._effective_wx_corp_secret and self._effective_wx_agent_id:
+            self._send_wechat(media)
             sent_channels.append("微信")
         if self._bark_server and self._bark_keys:
+            self._send_bark(media)
             sent_channels.append("Bark")
+        if not sent_channels:
+            logger.warning(
+                f"AWEmbyPush 没有可用的通知渠道，请在插件配置中填写 Telegram / 企业微信 / Bark 任一配置。"
+                f"（TG Token: {'有' if self._effective_tg_token else '无'}, "
+                f"TG Chat ID: {'有' if self._effective_tg_chat_id else '无'}, "
+                f"微信 Corp ID: {'有' if self._effective_wx_corp_id else '无'}, "
+                f"Bark Keys: {'有' if self._bark_keys else '无'}）"
+            )
         cards: List[dict] = self.get_data("recent_cards") or []
         cards.append({
             "time": datetime.now().strftime("%m-%d %H:%M"),
