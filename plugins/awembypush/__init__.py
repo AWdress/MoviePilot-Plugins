@@ -8,6 +8,8 @@ import time
 from datetime import datetime
 from typing import Any, List, Dict, Tuple, Optional
 
+from starlette.requests import Request
+
 from app.core.config import settings
 from app.core.event import eventmanager, Event
 from app.log import logger
@@ -311,7 +313,7 @@ class AWEmbyPush(_PluginBase):
             event_info.user_name = message["User"].get("Name")
         return event_info
 
-    async def _api_webhook(self, request: Any):
+    async def _api_webhook(self, request: Request):
         """独立 API 端点：接收 Emby/Jellyfin Webhook（application/json）"""
         try:
             body = await request.body()
