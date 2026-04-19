@@ -999,35 +999,38 @@ class AWEmbyPush(_PluginBase):
             ]},
         ]
         if not self._use_mp_wx:
-            wx_rows.extend([
+            wx_rows.append(
                 {'component': 'VRow', 'content': [
-                    {'component': 'VCol', 'props': {'cols': 12, 'md': 3}, 'content': [
+                    {'component': 'VCol', 'props': {'cols': 12, 'md': 4}, 'content': [
                         {'component': 'VTextField', 'props': {'model': 'wx_corp_id', 'label': 'Corp ID',
                             'hint': '企业 ID', 'persistent-hint': True}}]},
-                    {'component': 'VCol', 'props': {'cols': 12, 'md': 3}, 'content': [
+                    {'component': 'VCol', 'props': {'cols': 12, 'md': 4}, 'content': [
                         {'component': 'VTextField', 'props': {'model': 'wx_corp_secret', 'label': 'Corp Secret',
                             'hint': '应用密钥', 'persistent-hint': True}}]},
-                    {'component': 'VCol', 'props': {'cols': 12, 'md': 3}, 'content': [
+                    {'component': 'VCol', 'props': {'cols': 12, 'md': 4}, 'content': [
                         {'component': 'VTextField', 'props': {'model': 'wx_agent_id', 'label': 'Agent ID',
                             'hint': '应用 ID', 'persistent-hint': True}}]},
-                    {'component': 'VCol', 'props': {'cols': 12, 'md': 3}, 'content': [
-                        {'component': 'VSelect', 'props': {
-                            'model': 'wx_msg_type', 'label': '消息类型',
-                            'items': [
-                                {'title': '卡片 (news_notice)', 'value': 'news_notice'},
-                                {'title': '图文 (news)', 'value': 'news'},
-                            ]}}]},
-                ]},
-                {'component': 'VRow', 'content': [
-                    {'component': 'VCol', 'props': {'cols': 12, 'md': 6}, 'content': [
-                        {'component': 'VTextField', 'props': {'model': 'wx_user_id', 'label': '接收用户',
-                            'placeholder': '@all', 'hint': '默认推送给全员', 'persistent-hint': True}}]},
-                    {'component': 'VCol', 'props': {'cols': 12, 'md': 6}, 'content': [
-                        {'component': 'VTextField', 'props': {'model': 'wx_proxy_url', 'label': '代理地址',
-                            'placeholder': 'https://qyapi.weixin.qq.com',
-                            'hint': '自建代理可修改，默认官方地址', 'persistent-hint': True}}]},
-                ]},
-            ])
+                ]}
+            )
+        # 接收用户、消息类型始终显示（不属于 MP 通知渠道配置）
+        wx_rows.extend([
+            {'component': 'VRow', 'content': [
+                {'component': 'VCol', 'props': {'cols': 12, 'md': 4}, 'content': [
+                    {'component': 'VTextField', 'props': {'model': 'wx_user_id', 'label': '接收用户',
+                        'placeholder': '@all', 'hint': '默认推送给全员', 'persistent-hint': True}}]},
+                {'component': 'VCol', 'props': {'cols': 12, 'md': 4}, 'content': [
+                    {'component': 'VSelect', 'props': {
+                        'model': 'wx_msg_type', 'label': '消息类型',
+                        'items': [
+                            {'title': '卡片 (news_notice)', 'value': 'news_notice'},
+                            {'title': '图文 (news)', 'value': 'news'},
+                        ]}}]},
+                {'component': 'VCol', 'props': {'cols': 12, 'md': 4}, 'content': [
+                    {'component': 'VTextField', 'props': {'model': 'wx_proxy_url', 'label': '代理地址',
+                        'placeholder': 'https://qyapi.weixin.qq.com',
+                        'hint': '使用内置时可忽略', 'persistent-hint': True}}]},
+            ]},
+        ])
 
         # ── 组装完整表单 ──
         form_content = [
