@@ -6,6 +6,7 @@
     "v2": true,
     "icon": "https://raw.githubusercontent.com/walkxcode/dashboard-icons/main/png/emby.png",
     "author": "AWdress",
+    "labels": "通知,Emby,Webhook",
     "level": 1,
     "history": {
       "v1.4.2": "优化配置界面布局，开关与下拉框等宽对齐，消除空白区域",
