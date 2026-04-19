@@ -1085,50 +1085,6 @@ class AWEmbyPush(_PluginBase):
         ], {
             "enabled": False, "enable_watch_link": False, "watch_link_type": "server",
             "enable_tmdb": True, "dedup_window": 60, "episode_cache_timeout": 30,
-            "use_mp_tg": False, "mp_tg_channel": "", "use_mp_wx": False, "mp_wx_channel": ""nt': [
-                        {'component': 'VTextField', 'props': {'model': 'wx_corp_secret', 'label': 'Corp Secret',
-                            'hint': '关闭"使用 MP 内置"时填写', 'persistent-hint': True}}]},
-                    {'component': 'VCol', 'props': {'cols': 12, 'md': 3}, 'content': [
-                        {'component': 'VTextField', 'props': {'model': 'wx_agent_id', 'label': 'Agent ID',
-                            'hint': '关闭"使用 MP 内置"时填写', 'persistent-hint': True}}]},
-                    {'component': 'VCol', 'props': {'cols': 12, 'md': 3}, 'content': [
-                        {'component': 'VSelect', 'props': {
-                            'model': 'wx_msg_type', 'label': '消息类型',
-                            'items': [
-                                {'title': '卡片 (news_notice)', 'value': 'news_notice'},
-                                {'title': '图文 (news)', 'value': 'news'},
-                            ]}}]},
-                ]},
-                {'component': 'VRow', 'content': [
-                    {'component': 'VCol', 'props': {'cols': 12, 'md': 6}, 'content': [
-                        {'component': 'VTextField', 'props': {'model': 'wx_user_id', 'label': '接收用户',
-                            'placeholder': '@all', 'hint': '默认推送给全员', 'persistent-hint': True}}]},
-                    {'component': 'VCol', 'props': {'cols': 12, 'md': 6}, 'content': [
-                        {'component': 'VTextField', 'props': {'model': 'wx_proxy_url', 'label': '代理地址',
-                            'placeholder': 'https://qyapi.weixin.qq.com',
-                            'hint': '自建代理可修改，默认官方地址', 'persistent-hint': True}}]},
-                ]},
-
-                # ── Bark 配置 ──
-                {'component': 'VRow', 'props': {'class': 'mt-4'}, 'content': [
-                    {'component': 'VCol', 'props': {'cols': 12}, 'content': [
-                        {'component': 'VAlert', 'props': {
-                            'type': 'error', 'variant': 'tonal',
-                            'text': '🔔 Bark 通知配置（iOS）'}}]}]},
-                {'component': 'VRow', 'content': [
-                    {'component': 'VCol', 'props': {'cols': 12, 'md': 4}, 'content': [
-                        {'component': 'VTextField', 'props': {'model': 'bark_server', 'label': 'Bark 服务器',
-                            'placeholder': 'https://api.day.app',
-                            'hint': '自建服务器可修改', 'persistent-hint': True}}]},
-                    {'component': 'VCol', 'props': {'cols': 12, 'md': 8}, 'content': [
-                        {'component': 'VTextField', 'props': {'model': 'bark_keys', 'label': '设备 Key',
-                            'placeholder': '多个 Key 用英文逗号分隔',
-                            'hint': '留空则不启用 Bark 推送', 'persistent-hint': True}}]},
-                ]},
-            ]}
-        ], {
-            "enabled": False, "enable_watch_link": False, "watch_link_type": "server",
-            "enable_tmdb": True, "dedup_window": 60, "episode_cache_timeout": 30,
             "use_mp_tg": False, "mp_tg_channel": "", "use_mp_wx": False, "mp_wx_channel": "",
             "tg_bot_token": "", "tg_chat_id": "", "tg_api_host": "",
             "wx_corp_id": "", "wx_corp_secret": "", "wx_agent_id": "",
