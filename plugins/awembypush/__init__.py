@@ -278,6 +278,15 @@ class AWEmbyPush(_PluginBase):
         return self._wx_proxy_url or "https://qyapi.weixin.qq.com"
 
     @property
+    def _effective_wx_user_id(self) -> str:
+        if self._use_mp_wx and self._mp_wx_channel:
+            cfg = self._get_mp_notification_config("wechat", self._mp_wx_channel)
+            admins = cfg.get("WECHAT_ADMINS", "")
+            if admins:
+                return admins
+        return self._wx_user_id or "@all"
+
+    @property
     def _proxies(self) -> Optional[dict]:
         return getattr(settings, 'PROXY', None)
 
@@ -851,7 +860,7 @@ class AWEmbyPush(_PluginBase):
                     ),
                     "card_action": {"type": 1, "url": jump_url},
                 }
-                payload = {"touser": self._wx_user_id, "msgtype": "template_card",
+                payload = {"touser": self._effective_wx_user_id, "msgtype": "template_card",
                            "agentid": agent_id_val, "template_card": card}
             else:
                 title_text = f"{media['server_name']} | {media['status_text']} | 【{media['item_name']}】"
@@ -867,7 +876,7 @@ class AWEmbyPush(_PluginBase):
                 if media.get("overview"):
                     desc_parts.append(f"\n📝 内容简介：{_truncate(media['overview'], 100)}")
                 payload = {
-                    "touser": self._wx_user_id, "msgtype": "news", "agentid": agent_id_val,
+                    "touser": self._effective_wx_user_id, "msgtype": "news", "agentid": agent_id_val,
                     "news": {"articles": [{"title": title_text, "description": "\n".join(desc_parts),
                                            "url": jump_url, "picurl": image_url}]},
                 }
@@ -1012,12 +1021,9 @@ class AWEmbyPush(_PluginBase):
                             'hint': '应用 ID', 'persistent-hint': True}}]},
                 ]}
             )
-        # 接收用户、消息类型始终显示（不属于 MP 通知渠道配置）
-        wx_rows.extend([
+        # 消息类型始终显示
+        wx_rows.append(
             {'component': 'VRow', 'content': [
-                {'component': 'VCol', 'props': {'cols': 12, 'md': 4}, 'content': [
-                    {'component': 'VTextField', 'props': {'model': 'wx_user_id', 'label': '接收用户',
-                        'placeholder': '@all', 'hint': '默认推送给全员', 'persistent-hint': True}}]},
                 {'component': 'VCol', 'props': {'cols': 12, 'md': 4}, 'content': [
                     {'component': 'VSelect', 'props': {
                         'model': 'wx_msg_type', 'label': '消息类型',
@@ -1025,12 +1031,16 @@ class AWEmbyPush(_PluginBase):
                             {'title': '卡片 (news_notice)', 'value': 'news_notice'},
                             {'title': '图文 (news)', 'value': 'news'},
                         ]}}]},
+            ] + ([
+                {'component': 'VCol', 'props': {'cols': 12, 'md': 4}, 'content': [
+                    {'component': 'VTextField', 'props': {'model': 'wx_user_id', 'label': '接收用户',
+                        'placeholder': '@all', 'hint': '默认推送给全员', 'persistent-hint': True}}]},
                 {'component': 'VCol', 'props': {'cols': 12, 'md': 4}, 'content': [
                     {'component': 'VTextField', 'props': {'model': 'wx_proxy_url', 'label': '代理地址',
                         'placeholder': 'https://qyapi.weixin.qq.com',
-                        'hint': '使用内置时可忽略', 'persistent-hint': True}}]},
-            ]},
-        ])
+                        'hint': '自建代理可修改', 'persistent-hint': True}}]},
+            ] if not self._use_mp_wx else [])}
+        )
 
         # ── 组装完整表单 ──
         form_content = [
