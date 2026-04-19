@@ -1100,7 +1100,7 @@ class AWEmbyPush(_PluginBase):
         ], {
             "enabled": False, "enable_watch_link": False, "watch_link_type": "server",
             "enable_tmdb": True, "dedup_window": 60, "episode_cache_timeout": 30,
-            "use_mp_tg": False, "mp_tg_channel": "", "use_mp_wx": False, "mp_wx_channel": "",
+            "use_mp_tg": True, "mp_tg_channel": "", "use_mp_wx": True, "mp_wx_channel": "",
             "tg_bot_token": "", "tg_chat_id": "", "tg_api_host": "",
             "wx_corp_id": "", "wx_corp_secret": "", "wx_agent_id": "",
             "wx_user_id": "@all", "wx_proxy_url": "", "wx_msg_type": "news_notice",
