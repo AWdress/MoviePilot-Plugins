@@ -939,114 +939,77 @@ class AWEmbyPush(_PluginBase):
         except Exception:
             pass
 
-        return [
-            {'component': 'VForm', 'content': [
-                {'component': 'VRow', 'content': [
-                    {'component': 'VCol', 'props': {'cols': 6, 'md': 3}, 'content': [
-                        {'component': 'VSwitch', 'props': {'model': 'enabled', 'label': '启用插件', 'color': 'primary'}}]},
-                    {'component': 'VCol', 'props': {'cols': 6, 'md': 3}, 'content': [
-                        {'component': 'VSwitch', 'props': {'model': 'enable_tmdb', 'label': 'TMDB 增强', 'color': 'primary'}}]},
-                    {'component': 'VCol', 'props': {'cols': 6, 'md': 3}, 'content': [
-                        {'component': 'VSwitch', 'props': {'model': 'enable_watch_link', 'label': '观看按钮', 'color': 'primary'}}]},
-                    {'component': 'VCol', 'props': {'cols': 6, 'md': 3}, 'content': [
-                        {'component': 'VSelect', 'props': {
-                            'model': 'watch_link_type', 'label': '播放链接类型',
-                            'items': [
-                                {'title': 'Emby/Jellyfin 直链', 'value': 'server'},
-                                {'title': 'Forward App', 'value': 'forward'},
-                                {'title': 'Infuse', 'value': 'infuse'},
-                            ]}}]},
-                ]},
-
-                {'component': 'VRow', 'content': [
-                    {'component': 'VCol', 'props': {'cols': 12}, 'content': [
-                        {'component': 'VAlert', 'props': {
-                            'type': 'info', 'variant': 'tonal', 'style': 'font-size: 13px;',
-                            'text': '📡 Webhook 地址：http(s)://MP地址:3001/api/v1/plugin/AWEmbyPush/webhook?apikey=你的API密钥\n📌 Emby/Jellyfin 中请求内容类型请选择 application/json'
-                        }}]}]},
-
-                {'component': 'VRow', 'content': [
-                    {'component': 'VCol', 'props': {'cols': 12}, 'content': [
-                        {'component': 'VTextField', 'props': {
-                            'model': 'emby_server_url', 'label': '🖥️ Emby/Jellyfin 服务器地址',
-                            'placeholder': 'https://your-emby-server.com',
-                            'hint': '用于生成播放链接（开启"观看按钮"时需填写）', 'persistent-hint': True}}]}]},
-
-                {'component': 'VRow', 'content': [
-                    {'component': 'VCol', 'props': {'cols': 12, 'md': 6}, 'content': [
-                        {'component': 'VTextField', 'props': {
-                            'model': 'dedup_window', 'label': '⏱️ 消息去重窗口（秒）',
-                            'placeholder': '60', 'type': 'number',
-                            'hint': '同一媒体在此时间内不重复处理', 'persistent-hint': True}}]},
-                    {'component': 'VCol', 'props': {'cols': 12, 'md': 6}, 'content': [
-                        {'component': 'VTextField', 'props': {
-                            'model': 'episode_cache_timeout', 'label': '⏱️ 剧集合并等待（秒）',
-                            'placeholder': '30', 'type': 'number',
-                            'hint': '等待此时间后合并同一电视剧的多集入库通知', 'persistent-hint': True}}]},
-                ]},
-
-                # ── Telegram 配置 ──
-                {'component': 'VRow', 'props': {'class': 'mt-4'}, 'content': [
-                    {'component': 'VCol', 'props': {'cols': 12}, 'content': [
-                        {'component': 'VAlert', 'props': {
-                            'type': 'success', 'variant': 'tonal',
-                            'text': '📬 Telegram 通知配置'}}]}]},
-                {'component': 'VRow', 'content': [
-                    {'component': 'VCol', 'props': {'cols': 12, 'md': 4}, 'content': [
-                        {'component': 'VSwitch', 'props': {
-                            'model': 'use_mp_tg', 'label': '使用 MP 内置 TG 配置', 'color': 'success',
-                            'hint': '开启后从 MP 通知设置中读取', 'persistent-hint': True}}]},
-                    {'component': 'VCol', 'props': {'cols': 12, 'md': 8}, 'content': [
-                        {'component': 'VSelect', 'props': {
-                            'model': 'mp_tg_channel', 'label': '选择 TG 通知渠道',
-                            'items': tg_items,
-                            'hint': f'检测到 {len(tg_items)} 个已启用的 Telegram 渠道' if tg_items else '未检测到已启用的 Telegram 渠道',
-                            'persistent-hint': True}}]},
-                ]},
+        # ── 构建 Telegram 区块 ──
+        tg_rows = [
+            {'component': 'VRow', 'props': {'class': 'mt-4'}, 'content': [
+                {'component': 'VCol', 'props': {'cols': 12}, 'content': [
+                    {'component': 'VAlert', 'props': {
+                        'type': 'success', 'variant': 'tonal',
+                        'text': '📬 Telegram 通知配置'}}]}]},
+            {'component': 'VRow', 'content': [
+                {'component': 'VCol', 'props': {'cols': 12, 'md': 4}, 'content': [
+                    {'component': 'VSwitch', 'props': {
+                        'model': 'use_mp_tg', 'label': '使用 MP 内置 TG 配置', 'color': 'success',
+                        'hint': '保存后刷新页面生效', 'persistent-hint': True}}]},
+                {'component': 'VCol', 'props': {'cols': 12, 'md': 8}, 'content': [
+                    {'component': 'VSelect', 'props': {
+                        'model': 'mp_tg_channel', 'label': '选择 TG 通知渠道',
+                        'items': tg_items,
+                        'hint': f'检测到 {len(tg_items)} 个已启用的 Telegram 渠道' if tg_items else '未检测到已启用的 Telegram 渠道',
+                        'persistent-hint': True}}]},
+            ]},
+        ]
+        if not self._use_mp_tg:
+            tg_rows.append(
                 {'component': 'VRow', 'content': [
                     {'component': 'VCol', 'props': {'cols': 12, 'md': 4}, 'content': [
                         {'component': 'VTextField', 'props': {
                             'model': 'tg_bot_token', 'label': 'Bot Token',
-                            'hint': '关闭"使用 MP 内置"时填写', 'persistent-hint': True}}]},
+                            'hint': '通过 @BotFather 获取', 'persistent-hint': True}}]},
                     {'component': 'VCol', 'props': {'cols': 12, 'md': 4}, 'content': [
                         {'component': 'VTextField', 'props': {
                             'model': 'tg_chat_id', 'label': 'Chat ID',
-                            'hint': '关闭"使用 MP 内置"时填写', 'persistent-hint': True}}]},
+                            'hint': '目标用户或群组 ID', 'persistent-hint': True}}]},
                     {'component': 'VCol', 'props': {'cols': 12, 'md': 4}, 'content': [
                         {'component': 'VTextField', 'props': {
                             'model': 'tg_api_host', 'label': 'API Host',
                             'placeholder': 'https://api.telegram.org',
                             'hint': '自建反代可修改，默认官方地址', 'persistent-hint': True}}]},
-                ]},
+                ]}
+            )
 
-                # ── 企业微信配置 ──
-                {'component': 'VRow', 'props': {'class': 'mt-4'}, 'content': [
-                    {'component': 'VCol', 'props': {'cols': 12}, 'content': [
-                        {'component': 'VAlert', 'props': {
-                            'type': 'warning', 'variant': 'tonal',
-                            'text': '💼 企业微信通知配置'}}]}]},
-                {'component': 'VRow', 'content': [
-                    {'component': 'VCol', 'props': {'cols': 12, 'md': 4}, 'content': [
-                        {'component': 'VSwitch', 'props': {
-                            'model': 'use_mp_wx', 'label': '使用 MP 内置微信配置', 'color': 'warning',
-                            'hint': '开启后从 MP 通知设置中读取', 'persistent-hint': True}}]},
-                    {'component': 'VCol', 'props': {'cols': 12, 'md': 8}, 'content': [
-                        {'component': 'VSelect', 'props': {
-                            'model': 'mp_wx_channel', 'label': '选择微信通知渠道',
-                            'items': wx_items,
-                            'hint': f'检测到 {len(wx_items)} 个已启用的企业微信渠道' if wx_items else '未检测到已启用的企业微信渠道',
-                            'persistent-hint': True}}]},
-                ]},
+        # ── 构建企业微信区块 ──
+        wx_rows = [
+            {'component': 'VRow', 'props': {'class': 'mt-4'}, 'content': [
+                {'component': 'VCol', 'props': {'cols': 12}, 'content': [
+                    {'component': 'VAlert', 'props': {
+                        'type': 'warning', 'variant': 'tonal',
+                        'text': '💼 企业微信通知配置'}}]}]},
+            {'component': 'VRow', 'content': [
+                {'component': 'VCol', 'props': {'cols': 12, 'md': 4}, 'content': [
+                    {'component': 'VSwitch', 'props': {
+                        'model': 'use_mp_wx', 'label': '使用 MP 内置微信配置', 'color': 'warning',
+                        'hint': '保存后刷新页面生效', 'persistent-hint': True}}]},
+                {'component': 'VCol', 'props': {'cols': 12, 'md': 8}, 'content': [
+                    {'component': 'VSelect', 'props': {
+                        'model': 'mp_wx_channel', 'label': '选择微信通知渠道',
+                        'items': wx_items,
+                        'hint': f'检测到 {len(wx_items)} 个已启用的企业微信渠道' if wx_items else '未检测到已启用的企业微信渠道',
+                        'persistent-hint': True}}]},
+            ]},
+        ]
+        if not self._use_mp_wx:
+            wx_rows.extend([
                 {'component': 'VRow', 'content': [
                     {'component': 'VCol', 'props': {'cols': 12, 'md': 3}, 'content': [
                         {'component': 'VTextField', 'props': {'model': 'wx_corp_id', 'label': 'Corp ID',
-                            'hint': '关闭"使用 MP 内置"时填写', 'persistent-hint': True}}]},
+                            'hint': '企业 ID', 'persistent-hint': True}}]},
                     {'component': 'VCol', 'props': {'cols': 12, 'md': 3}, 'content': [
                         {'component': 'VTextField', 'props': {'model': 'wx_corp_secret', 'label': 'Corp Secret',
-                            'hint': '关闭"使用 MP 内置"时填写', 'persistent-hint': True}}]},
+                            'hint': '应用密钥', 'persistent-hint': True}}]},
                     {'component': 'VCol', 'props': {'cols': 12, 'md': 3}, 'content': [
                         {'component': 'VTextField', 'props': {'model': 'wx_agent_id', 'label': 'Agent ID',
-                            'hint': '关闭"使用 MP 内置"时填写', 'persistent-hint': True}}]},
+                            'hint': '应用 ID', 'persistent-hint': True}}]},
                     {'component': 'VCol', 'props': {'cols': 12, 'md': 3}, 'content': [
                         {'component': 'VSelect', 'props': {
                             'model': 'wx_msg_type', 'label': '消息类型',
@@ -1064,24 +1027,76 @@ class AWEmbyPush(_PluginBase):
                             'placeholder': 'https://qyapi.weixin.qq.com',
                             'hint': '自建代理可修改，默认官方地址', 'persistent-hint': True}}]},
                 ]},
+            ])
 
-                # ── Bark 配置 ──
-                {'component': 'VRow', 'props': {'class': 'mt-4'}, 'content': [
-                    {'component': 'VCol', 'props': {'cols': 12}, 'content': [
-                        {'component': 'VAlert', 'props': {
-                            'type': 'error', 'variant': 'tonal',
-                            'text': '🔔 Bark 通知配置（iOS）'}}]}]},
-                {'component': 'VRow', 'content': [
-                    {'component': 'VCol', 'props': {'cols': 12, 'md': 4}, 'content': [
-                        {'component': 'VTextField', 'props': {'model': 'bark_server', 'label': 'Bark 服务器',
-                            'placeholder': 'https://api.day.app',
-                            'hint': '自建服务器可修改', 'persistent-hint': True}}]},
-                    {'component': 'VCol', 'props': {'cols': 12, 'md': 8}, 'content': [
-                        {'component': 'VTextField', 'props': {'model': 'bark_keys', 'label': '设备 Key',
-                            'placeholder': '多个 Key 用英文逗号分隔',
-                            'hint': '留空则不启用 Bark 推送', 'persistent-hint': True}}]},
-                ]},
-            ]}
+        # ── 组装完整表单 ──
+        form_content = [
+            {'component': 'VRow', 'content': [
+                {'component': 'VCol', 'props': {'cols': 6, 'md': 3}, 'content': [
+                    {'component': 'VSwitch', 'props': {'model': 'enabled', 'label': '启用插件', 'color': 'primary'}}]},
+                {'component': 'VCol', 'props': {'cols': 6, 'md': 3}, 'content': [
+                    {'component': 'VSwitch', 'props': {'model': 'enable_tmdb', 'label': 'TMDB 增强', 'color': 'primary'}}]},
+                {'component': 'VCol', 'props': {'cols': 6, 'md': 3}, 'content': [
+                    {'component': 'VSwitch', 'props': {'model': 'enable_watch_link', 'label': '观看按钮', 'color': 'primary'}}]},
+                {'component': 'VCol', 'props': {'cols': 6, 'md': 3}, 'content': [
+                    {'component': 'VSelect', 'props': {
+                        'model': 'watch_link_type', 'label': '播放链接类型',
+                        'items': [
+                            {'title': 'Emby/Jellyfin 直链', 'value': 'server'},
+                            {'title': 'Forward App', 'value': 'forward'},
+                            {'title': 'Infuse', 'value': 'infuse'},
+                        ]}}]},
+            ]},
+            {'component': 'VRow', 'content': [
+                {'component': 'VCol', 'props': {'cols': 12}, 'content': [
+                    {'component': 'VAlert', 'props': {
+                        'type': 'info', 'variant': 'tonal', 'style': 'font-size: 13px;',
+                        'text': '📡 Webhook 地址：http(s)://MP地址:3001/api/v1/plugin/AWEmbyPush/webhook?apikey=你的API密钥\n📌 Emby/Jellyfin 中请求内容类型请选择 application/json'
+                    }}]}]},
+            {'component': 'VRow', 'content': [
+                {'component': 'VCol', 'props': {'cols': 12}, 'content': [
+                    {'component': 'VTextField', 'props': {
+                        'model': 'emby_server_url', 'label': '🖥️ Emby/Jellyfin 服务器地址',
+                        'placeholder': 'https://your-emby-server.com',
+                        'hint': '用于生成播放链接（开启"观看按钮"时需填写）', 'persistent-hint': True}}]}]},
+            {'component': 'VRow', 'content': [
+                {'component': 'VCol', 'props': {'cols': 12, 'md': 6}, 'content': [
+                    {'component': 'VTextField', 'props': {
+                        'model': 'dedup_window', 'label': '⏱️ 消息去重窗口（秒）',
+                        'placeholder': '60', 'type': 'number',
+                        'hint': '同一媒体在此时间内不重复处理', 'persistent-hint': True}}]},
+                {'component': 'VCol', 'props': {'cols': 12, 'md': 6}, 'content': [
+                    {'component': 'VTextField', 'props': {
+                        'model': 'episode_cache_timeout', 'label': '⏱️ 剧集合并等待（秒）',
+                        'placeholder': '30', 'type': 'number',
+                        'hint': '等待此时间后合并同一电视剧的多集入库通知', 'persistent-hint': True}}]},
+            ]},
+        ]
+
+        form_content.extend(tg_rows)
+        form_content.extend(wx_rows)
+
+        # ── Bark 配置 ──
+        form_content.extend([
+            {'component': 'VRow', 'props': {'class': 'mt-4'}, 'content': [
+                {'component': 'VCol', 'props': {'cols': 12}, 'content': [
+                    {'component': 'VAlert', 'props': {
+                        'type': 'error', 'variant': 'tonal',
+                        'text': '🔔 Bark 通知配置（iOS）'}}]}]},
+            {'component': 'VRow', 'content': [
+                {'component': 'VCol', 'props': {'cols': 12, 'md': 4}, 'content': [
+                    {'component': 'VTextField', 'props': {'model': 'bark_server', 'label': 'Bark 服务器',
+                        'placeholder': 'https://api.day.app',
+                        'hint': '自建服务器可修改', 'persistent-hint': True}}]},
+                {'component': 'VCol', 'props': {'cols': 12, 'md': 8}, 'content': [
+                    {'component': 'VTextField', 'props': {'model': 'bark_keys', 'label': '设备 Key',
+                        'placeholder': '多个 Key 用英文逗号分隔',
+                        'hint': '留空则不启用 Bark 推送', 'persistent-hint': True}}]},
+            ]},
+        ])
+
+        return [
+            {'component': 'VForm', 'content': form_content}
         ], {
             "enabled": False, "enable_watch_link": False, "watch_link_type": "server",
             "enable_tmdb": True, "dedup_window": 60, "episode_cache_timeout": 30,
