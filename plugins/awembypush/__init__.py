@@ -14,6 +14,7 @@ from app.core.config import settings
 from app.log import logger
 from app.plugins import _PluginBase
 from app.schemas import WebhookEventInfo
+from app.schemas.types import SystemConfigKey
 
 
 def _truncate(text: str, limit: int) -> str:
@@ -150,7 +151,7 @@ class AWEmbyPush(_PluginBase):
     plugin_name = "AWEmbyPush"
     plugin_desc = "原项目AWEmbyPush移植，监听 Emby/Jellyfin Webhook 入库事件，通过 Telegram / 企业微信 / Bark 发送精美媒体通知。支持TMDB元数据增强、剧集合并推送、消息去重。"
     plugin_icon = "https://raw.githubusercontent.com/walkxcode/dashboard-icons/main/png/emby.png"
-    plugin_version = "1.3.4"
+    plugin_version = "1.4.0"
     plugin_author = "AWdress"
     author_url = "https://github.com/AWdress/MoviePilot-Plugins"
     plugin_config_prefix = "awembypush_"
@@ -158,6 +159,10 @@ class AWEmbyPush(_PluginBase):
     auth_level = 1
 
     _enabled: bool = False
+    _use_mp_tg: bool = False
+    _mp_tg_channel: str = ""
+    _use_mp_wx: bool = False
+    _mp_wx_channel: str = ""
     _tg_bot_token: str = ""
     _tg_chat_id: str = ""
     _tg_api_host: str = ""
@@ -186,6 +191,10 @@ class AWEmbyPush(_PluginBase):
         if not config:
             return
         self._enabled = config.get("enabled", False)
+        self._use_mp_tg = config.get("use_mp_tg", False)
+        self._mp_tg_channel = config.get("mp_tg_channel", "")
+        self._use_mp_wx = config.get("use_mp_wx", False)
+        self._mp_wx_channel = config.get("mp_wx_channel", "")
         self._tg_bot_token = config.get("tg_bot_token", "")
         self._tg_chat_id = config.get("tg_chat_id", "")
         self._tg_api_host = config.get("tg_api_host", "").rstrip("/")
@@ -206,32 +215,66 @@ class AWEmbyPush(_PluginBase):
         self._episode_cache = _EpisodeCache(self._send_all_channels)
         self._episode_cache.CACHE_TIMEOUT = self._episode_cache_timeout
 
+    def _get_mp_notification_config(self, channel_type: str, channel_name: str) -> dict:
+        """从 MP 内置通知配置中获取指定渠道的 config"""
+        try:
+            notifications = self.systemconfig.get(SystemConfigKey.Notifications) or []
+            for n in notifications:
+                if (n.get("type") == channel_type
+                        and n.get("enabled")
+                        and n.get("name") == channel_name):
+                    return n.get("config", {})
+        except Exception as e:
+            logger.warning(f"AWEmbyPush 读取 MP 通知配置失败：{e}")
+        return {}
+
     @property
     def _effective_tg_token(self) -> str:
+        if self._use_mp_tg and self._mp_tg_channel:
+            cfg = self._get_mp_notification_config("telegram", self._mp_tg_channel)
+            return cfg.get("TELEGRAM_TOKEN", "")
         return self._tg_bot_token
 
     @property
     def _effective_tg_chat_id(self) -> str:
+        if self._use_mp_tg and self._mp_tg_channel:
+            cfg = self._get_mp_notification_config("telegram", self._mp_tg_channel)
+            return cfg.get("TELEGRAM_CHAT_ID", "")
         return self._tg_chat_id
 
     @property
     def _effective_tg_api_host(self) -> str:
+        if self._use_mp_tg and self._mp_tg_channel:
+            cfg = self._get_mp_notification_config("telegram", self._mp_tg_channel)
+            return cfg.get("API_URL", "") or "https://api.telegram.org"
         return self._tg_api_host or "https://api.telegram.org"
 
     @property
     def _effective_wx_corp_id(self) -> str:
+        if self._use_mp_wx and self._mp_wx_channel:
+            cfg = self._get_mp_notification_config("wechat", self._mp_wx_channel)
+            return cfg.get("WECHAT_CORPID", "")
         return self._wx_corp_id
 
     @property
     def _effective_wx_corp_secret(self) -> str:
+        if self._use_mp_wx and self._mp_wx_channel:
+            cfg = self._get_mp_notification_config("wechat", self._mp_wx_channel)
+            return cfg.get("WECHAT_APP_SECRET", "")
         return self._wx_corp_secret
 
     @property
     def _effective_wx_agent_id(self) -> str:
+        if self._use_mp_wx and self._mp_wx_channel:
+            cfg = self._get_mp_notification_config("wechat", self._mp_wx_channel)
+            return cfg.get("WECHAT_APP_ID", "")
         return self._wx_agent_id
 
     @property
     def _effective_wx_proxy_url(self) -> str:
+        if self._use_mp_wx and self._mp_wx_channel:
+            cfg = self._get_mp_notification_config("wechat", self._mp_wx_channel)
+            return cfg.get("WECHAT_PROXY", "") or "https://qyapi.weixin.qq.com"
         return self._wx_proxy_url or "https://qyapi.weixin.qq.com"
 
     @property
@@ -264,7 +307,31 @@ class AWEmbyPush(_PluginBase):
             "methods": ["POST"],
             "summary": "AWEmbyPush Webhook",
             "description": "接收 Emby/Jellyfin Webhook 回调（支持 application/json）"
+        }, {
+            "path": "/mp_channels",
+            "endpoint": self._api_mp_channels,
+            "methods": ["GET"],
+            "summary": "获取 MP 通知渠道列表",
+            "description": "返回 MP 内置的 Telegram / 企业微信通知渠道名称"
         }]
+
+    def _api_mp_channels(self):
+        """返回 MP 已配置的通知渠道列表，供前端下拉框使用"""
+        tg_channels = []
+        wx_channels = []
+        try:
+            notifications = self.systemconfig.get(SystemConfigKey.Notifications) or []
+            for n in notifications:
+                if not n.get("enabled"):
+                    continue
+                name = n.get("name", "")
+                if n.get("type") == "telegram" and name:
+                    tg_channels.append(name)
+                elif n.get("type") == "wechat" and name:
+                    wx_channels.append(name)
+        except Exception as e:
+            logger.warning(f"AWEmbyPush 获取 MP 通知渠道失败：{e}")
+        return {"telegram": tg_channels, "wechat": wx_channels}
 
     def _preprocess_jellyfin(self, message: dict) -> dict:
         """将 Jellyfin Webhook 格式转换为 Emby 格式"""
@@ -856,6 +923,22 @@ class AWEmbyPush(_PluginBase):
                 logger.error(f"AWEmbyPush Bark ({key[:8]}...) 发送异常：{e}")
 
     def get_form(self) -> Tuple[List[dict], Dict[str, Any]]:
+        # 动态获取 MP 已配置的通知渠道
+        tg_items = []
+        wx_items = []
+        try:
+            notifications = self.systemconfig.get(SystemConfigKey.Notifications) or []
+            for n in notifications:
+                if not n.get("enabled"):
+                    continue
+                name = n.get("name", "")
+                if n.get("type") == "telegram" and name:
+                    tg_items.append({"title": name, "value": name})
+                elif n.get("type") == "wechat" and name:
+                    wx_items.append({"title": name, "value": name})
+        except Exception:
+            pass
+
         return [
             {'component': 'VForm', 'content': [
                 {'component': 'VRow', 'content': [
@@ -902,6 +985,7 @@ class AWEmbyPush(_PluginBase):
                             'hint': '等待此时间后合并同一电视剧的多集入库通知', 'persistent-hint': True}}]},
                 ]},
 
+                # ── Telegram 配置 ──
                 {'component': 'VRow', 'props': {'class': 'mt-4'}, 'content': [
                     {'component': 'VCol', 'props': {'cols': 12}, 'content': [
                         {'component': 'VAlert', 'props': {
@@ -909,13 +993,25 @@ class AWEmbyPush(_PluginBase):
                             'text': '📬 Telegram 通知配置'}}]}]},
                 {'component': 'VRow', 'content': [
                     {'component': 'VCol', 'props': {'cols': 12, 'md': 4}, 'content': [
+                        {'component': 'VSwitch', 'props': {
+                            'model': 'use_mp_tg', 'label': '使用 MP 内置 TG 配置', 'color': 'success',
+                            'hint': '开启后从 MP 通知设置中读取', 'persistent-hint': True}}]},
+                    {'component': 'VCol', 'props': {'cols': 12, 'md': 8}, 'content': [
+                        {'component': 'VSelect', 'props': {
+                            'model': 'mp_tg_channel', 'label': '选择 TG 通知渠道',
+                            'items': tg_items,
+                            'hint': f'检测到 {len(tg_items)} 个已启用的 Telegram 渠道' if tg_items else '未检测到已启用的 Telegram 渠道',
+                            'persistent-hint': True}}]},
+                ]},
+                {'component': 'VRow', 'content': [
+                    {'component': 'VCol', 'props': {'cols': 12, 'md': 4}, 'content': [
                         {'component': 'VTextField', 'props': {
                             'model': 'tg_bot_token', 'label': 'Bot Token',
-                            'hint': '通过 @BotFather 获取', 'persistent-hint': True}}]},
+                            'hint': '关闭"使用 MP 内置"时填写', 'persistent-hint': True}}]},
                     {'component': 'VCol', 'props': {'cols': 12, 'md': 4}, 'content': [
                         {'component': 'VTextField', 'props': {
                             'model': 'tg_chat_id', 'label': 'Chat ID',
-                            'hint': '目标用户或群组 ID', 'persistent-hint': True}}]},
+                            'hint': '关闭"使用 MP 内置"时填写', 'persistent-hint': True}}]},
                     {'component': 'VCol', 'props': {'cols': 12, 'md': 4}, 'content': [
                         {'component': 'VTextField', 'props': {
                             'model': 'tg_api_host', 'label': 'API Host',
@@ -923,21 +1019,34 @@ class AWEmbyPush(_PluginBase):
                             'hint': '自建反代可修改，默认官方地址', 'persistent-hint': True}}]},
                 ]},
 
+                # ── 企业微信配置 ──
                 {'component': 'VRow', 'props': {'class': 'mt-4'}, 'content': [
                     {'component': 'VCol', 'props': {'cols': 12}, 'content': [
                         {'component': 'VAlert', 'props': {
                             'type': 'warning', 'variant': 'tonal',
                             'text': '💼 企业微信通知配置'}}]}]},
                 {'component': 'VRow', 'content': [
+                    {'component': 'VCol', 'props': {'cols': 12, 'md': 4}, 'content': [
+                        {'component': 'VSwitch', 'props': {
+                            'model': 'use_mp_wx', 'label': '使用 MP 内置微信配置', 'color': 'warning',
+                            'hint': '开启后从 MP 通知设置中读取', 'persistent-hint': True}}]},
+                    {'component': 'VCol', 'props': {'cols': 12, 'md': 8}, 'content': [
+                        {'component': 'VSelect', 'props': {
+                            'model': 'mp_wx_channel', 'label': '选择微信通知渠道',
+                            'items': wx_items,
+                            'hint': f'检测到 {len(wx_items)} 个已启用的企业微信渠道' if wx_items else '未检测到已启用的企业微信渠道',
+                            'persistent-hint': True}}]},
+                ]},
+                {'component': 'VRow', 'content': [
                     {'component': 'VCol', 'props': {'cols': 12, 'md': 3}, 'content': [
                         {'component': 'VTextField', 'props': {'model': 'wx_corp_id', 'label': 'Corp ID',
-                            'hint': '企业 ID', 'persistent-hint': True}}]},
+                            'hint': '关闭"使用 MP 内置"时填写', 'persistent-hint': True}}]},
                     {'component': 'VCol', 'props': {'cols': 12, 'md': 3}, 'content': [
                         {'component': 'VTextField', 'props': {'model': 'wx_corp_secret', 'label': 'Corp Secret',
-                            'hint': '应用密钥', 'persistent-hint': True}}]},
+                            'hint': '关闭"使用 MP 内置"时填写', 'persistent-hint': True}}]},
                     {'component': 'VCol', 'props': {'cols': 12, 'md': 3}, 'content': [
                         {'component': 'VTextField', 'props': {'model': 'wx_agent_id', 'label': 'Agent ID',
-                            'hint': '应用 ID', 'persistent-hint': True}}]},
+                            'hint': '关闭"使用 MP 内置"时填写', 'persistent-hint': True}}]},
                     {'component': 'VCol', 'props': {'cols': 12, 'md': 3}, 'content': [
                         {'component': 'VSelect', 'props': {
                             'model': 'wx_msg_type', 'label': '消息类型',
@@ -956,6 +1065,7 @@ class AWEmbyPush(_PluginBase):
                             'hint': '自建代理可修改，默认官方地址', 'persistent-hint': True}}]},
                 ]},
 
+                # ── Bark 配置 ──
                 {'component': 'VRow', 'props': {'class': 'mt-4'}, 'content': [
                     {'component': 'VCol', 'props': {'cols': 12}, 'content': [
                         {'component': 'VAlert', 'props': {
@@ -975,6 +1085,51 @@ class AWEmbyPush(_PluginBase):
         ], {
             "enabled": False, "enable_watch_link": False, "watch_link_type": "server",
             "enable_tmdb": True, "dedup_window": 60, "episode_cache_timeout": 30,
+            "use_mp_tg": False, "mp_tg_channel": "", "use_mp_wx": False, "mp_wx_channel": ""nt': [
+                        {'component': 'VTextField', 'props': {'model': 'wx_corp_secret', 'label': 'Corp Secret',
+                            'hint': '关闭"使用 MP 内置"时填写', 'persistent-hint': True}}]},
+                    {'component': 'VCol', 'props': {'cols': 12, 'md': 3}, 'content': [
+                        {'component': 'VTextField', 'props': {'model': 'wx_agent_id', 'label': 'Agent ID',
+                            'hint': '关闭"使用 MP 内置"时填写', 'persistent-hint': True}}]},
+                    {'component': 'VCol', 'props': {'cols': 12, 'md': 3}, 'content': [
+                        {'component': 'VSelect', 'props': {
+                            'model': 'wx_msg_type', 'label': '消息类型',
+                            'items': [
+                                {'title': '卡片 (news_notice)', 'value': 'news_notice'},
+                                {'title': '图文 (news)', 'value': 'news'},
+                            ]}}]},
+                ]},
+                {'component': 'VRow', 'content': [
+                    {'component': 'VCol', 'props': {'cols': 12, 'md': 6}, 'content': [
+                        {'component': 'VTextField', 'props': {'model': 'wx_user_id', 'label': '接收用户',
+                            'placeholder': '@all', 'hint': '默认推送给全员', 'persistent-hint': True}}]},
+                    {'component': 'VCol', 'props': {'cols': 12, 'md': 6}, 'content': [
+                        {'component': 'VTextField', 'props': {'model': 'wx_proxy_url', 'label': '代理地址',
+                            'placeholder': 'https://qyapi.weixin.qq.com',
+                            'hint': '自建代理可修改，默认官方地址', 'persistent-hint': True}}]},
+                ]},
+
+                # ── Bark 配置 ──
+                {'component': 'VRow', 'props': {'class': 'mt-4'}, 'content': [
+                    {'component': 'VCol', 'props': {'cols': 12}, 'content': [
+                        {'component': 'VAlert', 'props': {
+                            'type': 'error', 'variant': 'tonal',
+                            'text': '🔔 Bark 通知配置（iOS）'}}]}]},
+                {'component': 'VRow', 'content': [
+                    {'component': 'VCol', 'props': {'cols': 12, 'md': 4}, 'content': [
+                        {'component': 'VTextField', 'props': {'model': 'bark_server', 'label': 'Bark 服务器',
+                            'placeholder': 'https://api.day.app',
+                            'hint': '自建服务器可修改', 'persistent-hint': True}}]},
+                    {'component': 'VCol', 'props': {'cols': 12, 'md': 8}, 'content': [
+                        {'component': 'VTextField', 'props': {'model': 'bark_keys', 'label': '设备 Key',
+                            'placeholder': '多个 Key 用英文逗号分隔',
+                            'hint': '留空则不启用 Bark 推送', 'persistent-hint': True}}]},
+                ]},
+            ]}
+        ], {
+            "enabled": False, "enable_watch_link": False, "watch_link_type": "server",
+            "enable_tmdb": True, "dedup_window": 60, "episode_cache_timeout": 30,
+            "use_mp_tg": False, "mp_tg_channel": "", "use_mp_wx": False, "mp_wx_channel": "",
             "tg_bot_token": "", "tg_chat_id": "", "tg_api_host": "",
             "wx_corp_id": "", "wx_corp_secret": "", "wx_agent_id": "",
             "wx_user_id": "@all", "wx_proxy_url": "", "wx_msg_type": "news_notice",
