@@ -151,7 +151,7 @@ class AWEmbyPush(_PluginBase):
     plugin_name = "AWEmbyPush"
     plugin_desc = "原项目AWEmbyPush移植，监听 Emby/Jellyfin Webhook 入库事件，通过 Telegram / 企业微信 / Bark 发送精美媒体通知。支持TMDB元数据增强、剧集合并推送、消息去重。"
     plugin_icon = "https://raw.githubusercontent.com/walkxcode/dashboard-icons/main/png/emby.png"
-    plugin_version = "1.4.0"
+    plugin_version = "1.4.1"
     plugin_author = "AWdress"
     author_url = "https://github.com/AWdress/MoviePilot-Plugins"
     plugin_config_prefix = "awembypush_"
