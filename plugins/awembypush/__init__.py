@@ -151,7 +151,7 @@ class AWEmbyPush(_PluginBase):
     plugin_name = "AWEmbyPush"
     plugin_desc = "原项目AWEmbyPush移植，监听 Emby/Jellyfin Webhook 入库事件，通过 Telegram / 企业微信 / Bark 发送精美媒体通知。支持TMDB元数据增强、剧集合并推送、消息去重。"
     plugin_icon = "https://raw.githubusercontent.com/walkxcode/dashboard-icons/main/png/emby.png"
-    plugin_version = "1.4.1"
+    plugin_version = "1.4.2"
     plugin_author = "AWdress"
     author_url = "https://github.com/AWdress/MoviePilot-Plugins"
     plugin_config_prefix = "awembypush_"
@@ -956,11 +956,11 @@ class AWEmbyPush(_PluginBase):
                         'type': 'success', 'variant': 'tonal',
                         'text': '📬 Telegram 通知配置'}}]}]},
             {'component': 'VRow', 'content': [
-                {'component': 'VCol', 'props': {'cols': 12, 'md': 4}, 'content': [
+                {'component': 'VCol', 'props': {'cols': 12, 'md': 6}, 'content': [
                     {'component': 'VSwitch', 'props': {
                         'model': 'use_mp_tg', 'label': '使用 MP 内置 TG 配置', 'color': 'success',
                         'hint': '保存后刷新页面生效', 'persistent-hint': True}}]},
-                {'component': 'VCol', 'props': {'cols': 12, 'md': 8}, 'content': [
+                {'component': 'VCol', 'props': {'cols': 12, 'md': 6}, 'content': [
                     {'component': 'VSelect', 'props': {
                         'model': 'mp_tg_channel', 'label': '选择 TG 通知渠道',
                         'items': tg_items,
@@ -995,11 +995,11 @@ class AWEmbyPush(_PluginBase):
                         'type': 'warning', 'variant': 'tonal',
                         'text': '💼 企业微信通知配置'}}]}]},
             {'component': 'VRow', 'content': [
-                {'component': 'VCol', 'props': {'cols': 12, 'md': 4}, 'content': [
+                {'component': 'VCol', 'props': {'cols': 12, 'md': 6}, 'content': [
                     {'component': 'VSwitch', 'props': {
                         'model': 'use_mp_wx', 'label': '使用 MP 内置微信配置', 'color': 'warning',
                         'hint': '保存后刷新页面生效', 'persistent-hint': True}}]},
-                {'component': 'VCol', 'props': {'cols': 12, 'md': 8}, 'content': [
+                {'component': 'VCol', 'props': {'cols': 12, 'md': 6}, 'content': [
                     {'component': 'VSelect', 'props': {
                         'model': 'mp_wx_channel', 'label': '选择微信通知渠道',
                         'items': wx_items,
@@ -1021,10 +1021,10 @@ class AWEmbyPush(_PluginBase):
                             'hint': '应用 ID', 'persistent-hint': True}}]},
                 ]}
             )
-        # 消息类型始终显示
+        # 消息类型 + 可选手动字段
         wx_rows.append(
             {'component': 'VRow', 'content': [
-                {'component': 'VCol', 'props': {'cols': 12, 'md': 4}, 'content': [
+                {'component': 'VCol', 'props': {'cols': 12, 'md': 6}, 'content': [
                     {'component': 'VSelect', 'props': {
                         'model': 'wx_msg_type', 'label': '消息类型',
                         'items': [
@@ -1033,10 +1033,10 @@ class AWEmbyPush(_PluginBase):
                         ],
                         'hint': '微信插件仅支持图文(news)格式', 'persistent-hint': True}}]},
             ] + ([
-                {'component': 'VCol', 'props': {'cols': 12, 'md': 4}, 'content': [
+                {'component': 'VCol', 'props': {'cols': 12, 'md': 3}, 'content': [
                     {'component': 'VTextField', 'props': {'model': 'wx_user_id', 'label': '接收用户',
-                        'placeholder': '@all', 'hint': '默认推送给全员', 'persistent-hint': True}}]},
-                {'component': 'VCol', 'props': {'cols': 12, 'md': 4}, 'content': [
+                        'placeholder': '@all', 'hint': '默认推送全员', 'persistent-hint': True}}]},
+                {'component': 'VCol', 'props': {'cols': 12, 'md': 3}, 'content': [
                     {'component': 'VTextField', 'props': {'model': 'wx_proxy_url', 'label': '代理地址',
                         'placeholder': 'https://qyapi.weixin.qq.com',
                         'hint': '自建代理可修改', 'persistent-hint': True}}]},
