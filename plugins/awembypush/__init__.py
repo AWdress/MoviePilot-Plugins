@@ -1028,9 +1028,10 @@ class AWEmbyPush(_PluginBase):
                     {'component': 'VSelect', 'props': {
                         'model': 'wx_msg_type', 'label': '消息类型',
                         'items': [
-                            {'title': '卡片 (news_notice)', 'value': 'news_notice'},
-                            {'title': '图文 (news)', 'value': 'news'},
-                        ]}}]},
+                            {'title': '卡片 (news_notice) - 不支持微信插件', 'value': 'news_notice'},
+                            {'title': '图文 (news) - 支持微信插件', 'value': 'news'},
+                        ],
+                        'hint': '微信插件仅支持图文(news)格式', 'persistent-hint': True}}]},
             ] + ([
                 {'component': 'VCol', 'props': {'cols': 12, 'md': 4}, 'content': [
                     {'component': 'VTextField', 'props': {'model': 'wx_user_id', 'label': '接收用户',
