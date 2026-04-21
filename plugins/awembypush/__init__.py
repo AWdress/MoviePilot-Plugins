@@ -884,8 +884,11 @@ class AWEmbyPush(_PluginBase):
         image_url = media.get("image_url", "")
         play_url = media.get("play_url", "")
         tmdb_url = media.get("tmdb_url", "")
-        # 企业微信只支持 http/https URL
-        safe_play_url = play_url if play_url.startswith(("http://", "https://")) else ""
+        # 企业微信只支持 http/https URL，非 http 链接可通过中转前缀包装
+        if play_url.startswith(("http://", "https://")):
+            safe_play_url = play_url
+        else:
+            safe_play_url = self._build_redirect_url(play_url) if play_url else ""
         safe_tmdb_url = tmdb_url if tmdb_url.startswith(("http://", "https://")) else ""
         jump_url = (safe_play_url if (self._enable_watch_link and safe_play_url)
                     else safe_tmdb_url or "https://www.themoviedb.org/")
@@ -1158,9 +1161,9 @@ class AWEmbyPush(_PluginBase):
             {'component': 'VRow', 'content': [
                 {'component': 'VCol', 'props': {'cols': 12}, 'content': [
                     {'component': 'VTextField', 'props': {
-                        'model': 'link_redirect_prefix', 'label': '🔗 TG 非HTTP链接中转前缀（可选）',
+                        'model': 'link_redirect_prefix', 'label': '🔗 TG/微信 非HTTP链接中转前缀（可选）',
                         'placeholder': 'https://your-domain.com/open?url={url}',
-                        'hint': '用于将 infuse:// 等协议包装成 http 按钮链接，支持 {url} 占位符', 'persistent-hint': True}}]}]},
+                        'hint': '用于将 infuse:// 等协议包装成 http 按钮链接，支持 {url} 占位符（TG/微信通用）', 'persistent-hint': True}}]}]},
             {'component': 'VRow', 'content': [
                 {'component': 'VCol', 'props': {'cols': 12, 'md': 6}, 'content': [
                     {'component': 'VTextField', 'props': {
