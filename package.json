@@ -2,13 +2,14 @@
   "AWEmbyPush": {
     "name": "AWEmbyPush",
     "description": "入库后通过 Telegram / 企业微信 / Bark 发送精美媒体通知，样式与 AWEmbyPush 一致。",
-    "version": "1.5.0",
+    "version": "1.5.1",
     "v2": true,
     "icon": "https://raw.githubusercontent.com/AWdress/MoviePilot-Plugins/main/plugins/awembypush/logo.png",
     "author": "AWdress",
     "labels": "通知,Emby,Webhook",
     "level": 1,
     "history": {
+      "v1.5.1": "优化自定义模板区排版与变量说明，模板字段默认预置并更易读",
       "v1.5.0": "新增自定义推送模板（测试中）：支持 Telegram/企业微信/Bark 三渠道变量模板",
       "v1.4.3": "统一插件与包元数据图标地址为仓库 logo.png",
       "v1.4.2": "优化配置界面布局，开关与下拉框等宽对齐，消除空白区域",

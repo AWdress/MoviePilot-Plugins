@@ -154,7 +154,7 @@ class AWEmbyPush(_PluginBase):
     plugin_name = "AWEmbyPush"
     plugin_desc = "原项目AWEmbyPush移植，监听 Emby/Jellyfin Webhook 入库事件，通过 Telegram / 企业微信 / Bark 发送精美媒体通知。支持TMDB元数据增强、剧集合并推送、消息去重。"
     plugin_icon = "https://raw.githubusercontent.com/AWdress/MoviePilot-Plugins/main/plugins/awembypush/logo.png"
-    plugin_version = "1.5.0"
+    plugin_version = "1.5.1"
     plugin_author = "AWdress"
     author_url = "https://github.com/AWdress/MoviePilot-Plugins"
     plugin_config_prefix = "awembypush_"
@@ -1227,54 +1227,69 @@ class AWEmbyPush(_PluginBase):
                         {'component': 'VAlert', 'props': {
                             'type': 'warning',
                             'variant': 'tonal',
-                            'text': '⚠️ 自定义模板处于测试阶段，请谨慎使用。\n变量说明：{{server_name}}=媒体服务器名，{{status_text}}=新片/新剧速递，{{item_name}}=媒体标题，{{episode_text}}=季集信息，{{genres}}=类型，{{cast}}=主演，{{rating}}=评分，{{release_date}}=上映/首播日期，{{overview}}=简介，{{play_url}}=播放链接，{{tmdb_url}}=TMDB 链接。'
-                        }}]}]},
+                            'text': '⚠️ 自定义模板处于测试阶段，请谨慎使用。'}}]}]},
                 {'component': 'VRow', 'content': [
+                    {'component': 'VCol', 'props': {'cols': 12}, 'content': [
+                        {'component': 'VAlert', 'props': {
+                            'type': 'info',
+                            'variant': 'tonal',
+                            'text': '变量说明\n{{server_name}} 媒体服务器名\n{{status_text}} 新片/新剧速递\n{{item_name}} 媒体标题\n{{episode_text}} 季集信息\n{{genres}} 类型\n{{cast}} 主演\n{{rating}} 评分\n{{release_date}} 上映/首播日期\n{{overview}} 简介\n{{play_url}} 播放链接\n{{tmdb_url}} TMDB 链接'}}]}]},
+                {'component': 'VRow', 'props': {'class': 'mt-2'}, 'content': [
                     {'component': 'VCol', 'props': {'cols': 12}, 'content': [
                         {'component': 'VTextarea', 'props': {
                             'model': 'tg_template',
                             'label': 'Telegram 模板（HTML）',
-                            'rows': 4,
+                            'rows': 5,
                             'placeholder': '<b>{{server_name}} | {{status_text}}</b>\n<b>【{{item_name}}】</b>\n{{episode_text}}\n📺 {{genres}}\n⭐ {{rating}}',
-                            'hint': '启用后覆盖 Telegram 默认正文模板',
+                            'hint': '默认模板已预置，修改后将覆盖 Telegram 默认正文模板',
                             'persistent-hint': True,
                         }}]}]},
+                {'component': 'VRow', 'props': {'class': 'mt-2'}, 'content': [
+                    {'component': 'VCol', 'props': {'cols': 12}, 'content': [
+                        {'component': 'VAlert', 'props': {'type': 'warning', 'variant': 'tonal', 'text': '💼 企业微信模板'}}]}]},
                 {'component': 'VRow', 'content': [
-                    {'component': 'VCol', 'props': {'cols': 12, 'md': 6}, 'content': [
+                    {'component': 'VCol', 'props': {'cols': 12}, 'content': [
                         {'component': 'VTextarea', 'props': {
                             'model': 'wx_title_template',
                             'label': '企业微信标题模板',
                             'rows': 3,
                             'placeholder': '{{server_name}} | {{status_text}} | 【{{item_name}}】',
+                            'hint': '默认模板已预置，可直接微调',
                             'persistent-hint': True,
-                        }}]},
-                    {'component': 'VCol', 'props': {'cols': 12, 'md': 6}, 'content': [
+                        }}]}]},
+                {'component': 'VRow', 'content': [
+                    {'component': 'VCol', 'props': {'cols': 12}, 'content': [
                         {'component': 'VTextarea', 'props': {
                             'model': 'wx_body_template',
                             'label': '企业微信正文模板',
-                            'rows': 3,
+                            'rows': 4,
                             'placeholder': '{{episode_text}}\n📺 {{genres}}\n👥 {{cast}}\n⭐ {{rating}}\n{{overview}}',
+                            'hint': '默认模板已预置，可直接微调',
                             'persistent-hint': True,
-                        }}]},
-                ]},
+                        }}]}]},
+                {'component': 'VRow', 'props': {'class': 'mt-2'}, 'content': [
+                    {'component': 'VCol', 'props': {'cols': 12}, 'content': [
+                        {'component': 'VAlert', 'props': {'type': 'error', 'variant': 'tonal', 'text': '🔔 Bark 模板'}}]}]},
                 {'component': 'VRow', 'content': [
-                    {'component': 'VCol', 'props': {'cols': 12, 'md': 6}, 'content': [
+                    {'component': 'VCol', 'props': {'cols': 12}, 'content': [
                         {'component': 'VTextarea', 'props': {
                             'model': 'bark_title_template',
                             'label': 'Bark 标题模板',
                             'rows': 3,
                             'placeholder': '{{server_name}} | {{status_text}}\n【{{item_name}}】',
+                            'hint': '默认模板已预置，可直接微调',
                             'persistent-hint': True,
-                        }}]},
-                    {'component': 'VCol', 'props': {'cols': 12, 'md': 6}, 'content': [
+                        }}]}]},
+                {'component': 'VRow', 'content': [
+                    {'component': 'VCol', 'props': {'cols': 12}, 'content': [
                         {'component': 'VTextarea', 'props': {
                             'model': 'bark_body_template',
                             'label': 'Bark 正文模板',
-                            'rows': 3,
+                            'rows': 4,
                             'placeholder': '{{episode_text}}\n📺 {{genres}}\n⭐ {{rating}}\n{{overview}}',
+                            'hint': '默认模板已预置，可直接微调',
                             'persistent-hint': True,
-                        }}]},
-                ]},
+                        }}]}]},
             ])
 
         form_content.extend(tg_rows)
