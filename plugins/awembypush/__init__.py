@@ -224,11 +224,11 @@ class AWEmbyPush(_PluginBase):
         self._dedup_window = int(config.get("dedup_window") or 60)
         self._episode_cache_timeout = int(config.get("episode_cache_timeout") or 30)
         self._enable_custom_template = config.get("enable_custom_template", False)
-        self._tg_template = config.get("tg_template", "")
-        self._wx_title_template = config.get("wx_title_template", "")
-        self._wx_body_template = config.get("wx_body_template", "")
-        self._bark_title_template = config.get("bark_title_template", "")
-        self._bark_body_template = config.get("bark_body_template", "")
+        self._tg_template = config.get("tg_template") or self._default_tg_template()
+        self._wx_title_template = config.get("wx_title_template") or self._default_wx_title_template()
+        self._wx_body_template = config.get("wx_body_template") or self._default_wx_body_template()
+        self._bark_title_template = config.get("bark_title_template") or self._default_bark_title_template()
+        self._bark_body_template = config.get("bark_body_template") or self._default_bark_body_template()
         self._episode_cache = _EpisodeCache(self._send_all_channels)
         self._episode_cache.CACHE_TIMEOUT = self._episode_cache_timeout
 
@@ -318,6 +318,39 @@ class AWEmbyPush(_PluginBase):
     @property
     def _tmdb_image_domain(self) -> str:
         return getattr(settings, 'TMDB_IMAGE_DOMAIN', None) or "image.tmdb.org"
+
+    @staticmethod
+    def _default_tg_template() -> str:
+        return (
+            "<b>{{server_name}} | {{status_text}}</b>\n\n"
+            "<b>【{{item_name}}】</b>\n{{episode_text}}\n\n"
+            "👥 主演：{{cast}}\n📺 类型：{{genres}}\n⭐ 评分：{{rating}}\n📅 日期：{{release_date}}\n\n"
+            "📝 简介：\n<blockquote>{{overview}}</blockquote>"
+        )
+
+    @staticmethod
+    def _default_wx_title_template() -> str:
+        return "{{server_name}} | {{status_text}} | 【{{item_name}}】"
+
+    @staticmethod
+    def _default_wx_body_template() -> str:
+        return (
+            "{{episode_text}}\n"
+            "👥 主演：{{cast}}\n📺 类型：{{genres}}\n⭐ 评分：{{rating}}\n📅 日期：{{release_date}}\n\n"
+            "{{overview}}"
+        )
+
+    @staticmethod
+    def _default_bark_title_template() -> str:
+        return "{{server_name}} | {{status_text}}\n【{{item_name}}】"
+
+    @staticmethod
+    def _default_bark_body_template() -> str:
+        return (
+            "{{episode_text}}\n"
+            "👥 {{cast}}\n📺 {{genres}}  ⭐ {{rating}}\n📅 {{release_date}}\n\n"
+            "{{overview}}"
+        )
 
     def get_state(self) -> bool:
         return self._enabled
@@ -1194,7 +1227,7 @@ class AWEmbyPush(_PluginBase):
                         {'component': 'VAlert', 'props': {
                             'type': 'warning',
                             'variant': 'tonal',
-                            'text': '⚠️ 自定义模板处于测试阶段，变量写错会导致样式异常，请谨慎使用。可用变量：{{server_name}} {{status_text}} {{item_name}} {{episode_text}} {{genres}} {{cast}} {{rating}} {{release_date}} {{overview}} {{play_url}} {{tmdb_url}}'
+                            'text': '⚠️ 自定义模板处于测试阶段，请谨慎使用。\n变量说明：{{server_name}}=媒体服务器名，{{status_text}}=新片/新剧速递，{{item_name}}=媒体标题，{{episode_text}}=季集信息，{{genres}}=类型，{{cast}}=主演，{{rating}}=评分，{{release_date}}=上映/首播日期，{{overview}}=简介，{{play_url}}=播放链接，{{tmdb_url}}=TMDB 链接。'
                         }}]}]},
                 {'component': 'VRow', 'content': [
                     {'component': 'VCol', 'props': {'cols': 12}, 'content': [
@@ -1274,11 +1307,11 @@ class AWEmbyPush(_PluginBase):
             "enable_tmdb": True, "dedup_window": 60, "episode_cache_timeout": 30,
             "enable_custom_template": False,
             "use_mp_tg": True, "mp_tg_channel": "", "use_mp_wx": True, "mp_wx_channel": "",
-            "tg_template": "<b>{{server_name}} | {{status_text}}</b>\n\n<b>【{{item_name}}】</b>\n{{episode_text}}\n\n👥 主演：{{cast}}\n📺 类型：{{genres}}\n⭐ 评分：{{rating}}\n📅 日期：{{release_date}}\n\n📝 简介：\n<blockquote>{{overview}}</blockquote>",
-            "wx_title_template": "{{server_name}} | {{status_text}} | 【{{item_name}}】",
-            "wx_body_template": "{{episode_text}}\n👥 主演：{{cast}}\n📺 类型：{{genres}}\n⭐ 评分：{{rating}}\n📅 日期：{{release_date}}\n\n{{overview}}",
-            "bark_title_template": "{{server_name}} | {{status_text}}\n【{{item_name}}】",
-            "bark_body_template": "{{episode_text}}\n👥 {{cast}}\n📺 {{genres}}  ⭐ {{rating}}\n📅 {{release_date}}\n\n{{overview}}",
+            "tg_template": self._default_tg_template(),
+            "wx_title_template": self._default_wx_title_template(),
+            "wx_body_template": self._default_wx_body_template(),
+            "bark_title_template": self._default_bark_title_template(),
+            "bark_body_template": self._default_bark_body_template(),
             "tg_bot_token": "", "tg_chat_id": "", "tg_api_host": "",
             "wx_corp_id": "", "wx_corp_secret": "", "wx_agent_id": "",
             "wx_user_id": "@all", "wx_proxy_url": "", "wx_msg_type": "news_notice",
