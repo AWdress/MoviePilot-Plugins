@@ -3,6 +3,7 @@
 import json
 import re
 import html
+from urllib.parse import quote
 import requests
 import traceback
 import threading
@@ -178,6 +179,7 @@ class AWEmbyPush(_PluginBase):
     _bark_keys: str = ""
     _enable_watch_link: bool = False
     _watch_link_type: str = "server"
+    _link_redirect_prefix: str = ""
     _emby_server_url: str = ""
     _enable_tmdb: bool = True
     _dedup_window: int = 60
@@ -216,6 +218,7 @@ class AWEmbyPush(_PluginBase):
         self._bark_keys = config.get("bark_keys", "")
         self._enable_watch_link = config.get("enable_watch_link", False)
         self._watch_link_type = config.get("watch_link_type", "server")
+        self._link_redirect_prefix = config.get("link_redirect_prefix", "").strip()
         self._emby_server_url = config.get("emby_server_url", "").rstrip("/")
         self._enable_tmdb = config.get("enable_tmdb", True)
         self._dedup_window = int(config.get("dedup_window") or 60)
@@ -754,6 +757,16 @@ class AWEmbyPush(_PluginBase):
             return f"{base}/web/index.html#!/item?id={info.item_id}"
         return base or ""
 
+    def _build_redirect_url(self, raw_url: str) -> str:
+        prefix = (self._link_redirect_prefix or "").strip()
+        if not prefix or not prefix.startswith(("http://", "https://")):
+            return ""
+        encoded = quote(raw_url, safe="")
+        if "{url}" in prefix:
+            return prefix.replace("{url}", encoded)
+        sep = "&" if "?" in prefix else "?"
+        return f"{prefix}{sep}url={encoded}"
+
     def _template_context(self, media: dict) -> dict:
         return {
             "server_name": media.get("server_name", ""),
@@ -813,7 +826,11 @@ class AWEmbyPush(_PluginBase):
             if play_url.startswith(("http://", "https://")):
                 buttons.append({"text": "▶️ 立即观看", "url": play_url})
             else:
-                caption += f"\n\n▶️ 立即观看：{html.escape(play_url)}"
+                redirect_url = self._build_redirect_url(play_url)
+                if redirect_url:
+                    buttons.append({"text": "▶️ 立即观看", "url": redirect_url})
+                else:
+                    caption += f"\n\n▶️ 立即观看：{html.escape(play_url)}"
         if tmdb_url:
             buttons.append({"text": "ℹ️ 了解更多", "url": tmdb_url})
         reply_markup = {"inline_keyboard": [buttons]} if buttons else None
@@ -1139,6 +1156,12 @@ class AWEmbyPush(_PluginBase):
                         'placeholder': 'https://your-emby-server.com',
                         'hint': '用于生成播放链接（开启"观看按钮"时需填写）', 'persistent-hint': True}}]}]},
             {'component': 'VRow', 'content': [
+                {'component': 'VCol', 'props': {'cols': 12}, 'content': [
+                    {'component': 'VTextField', 'props': {
+                        'model': 'link_redirect_prefix', 'label': '🔗 TG 非HTTP链接中转前缀（可选）',
+                        'placeholder': 'https://your-domain.com/open?url={url}',
+                        'hint': '用于将 infuse:// 等协议包装成 http 按钮链接，支持 {url} 占位符', 'persistent-hint': True}}]}]},
+            {'component': 'VRow', 'content': [
                 {'component': 'VCol', 'props': {'cols': 12, 'md': 6}, 'content': [
                     {'component': 'VTextField', 'props': {
                         'model': 'dedup_window', 'label': '⏱️ 消息去重窗口（秒）',
@@ -1244,6 +1267,7 @@ class AWEmbyPush(_PluginBase):
             {'component': 'VForm', 'content': form_content}
         ], {
             "enabled": False, "enable_watch_link": False, "watch_link_type": "server",
+            "link_redirect_prefix": "",
             "enable_tmdb": True, "dedup_window": 60, "episode_cache_timeout": 30,
             "enable_custom_template": False,
             "use_mp_tg": True, "mp_tg_channel": "", "use_mp_wx": True, "mp_wx_channel": "",
