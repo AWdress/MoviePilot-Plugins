@@ -2,6 +2,7 @@
 # -*- coding: UTF-8 -*-
 import json
 import re
+import html
 import requests
 import traceback
 import threading
@@ -769,14 +770,15 @@ class AWEmbyPush(_PluginBase):
             "channel": media.get("channel", ""),
         }
 
-    def _render_template(self, template: str, media: dict) -> str:
+    def _render_template(self, template: str, media: dict, escape_html: bool = False) -> str:
         if not template:
             return ""
         ctx = self._template_context(media)
 
         def _replace(match):
             key = match.group(1).strip()
-            return str(ctx.get(key, ""))
+            value = str(ctx.get(key, ""))
+            return html.escape(value) if escape_html else value
 
         return re.sub(r"\{\{\s*([a-zA-Z0-9_]+)\s*\}\}", _replace, template)
 
@@ -785,7 +787,7 @@ class AWEmbyPush(_PluginBase):
         date_label = "📺 首播" if media.get("is_ep") else "🎬 上映"
         release_date = media.get("release_date", "") or "Unknown"
         if self._enable_custom_template and self._tg_template:
-            caption = self._render_template(self._tg_template, media)
+            caption = self._render_template(self._tg_template, media, escape_html=True)
         else:
             caption = f"<b>{media['server_name']} | {media['status_text']}</b>\n\n"
             caption += "─────────────────────\n\n"
@@ -811,7 +813,7 @@ class AWEmbyPush(_PluginBase):
             if play_url.startswith(("http://", "https://")):
                 buttons.append({"text": "▶️ 立即观看", "url": play_url})
             else:
-                caption += f"\n\n▶️ <a href=\"{play_url}\">立即观看</a>"
+                caption += f"\n\n▶️ 立即观看：{html.escape(play_url)}"
         if tmdb_url:
             buttons.append({"text": "ℹ️ 了解更多", "url": tmdb_url})
         reply_markup = {"inline_keyboard": [buttons]} if buttons else None
@@ -907,9 +909,10 @@ class AWEmbyPush(_PluginBase):
                     if self._wx_title_template:
                         card["main_title"]["title"] = self._render_template(self._wx_title_template, media)
                     if self._wx_body_template:
+                        wx_desc = self._render_template(self._wx_body_template, media).replace("\r", "")
                         card["vertical_content_list"] = [{
                             "title": "📝 自定义内容",
-                            "desc": _truncate(self._render_template(self._wx_body_template, media), 500),
+                            "desc": _truncate(wx_desc, 300),
                         }]
                 payload = {"touser": self._effective_wx_user_id, "msgtype": "template_card",
                            "agentid": agent_id_val, "template_card": card}
@@ -930,7 +933,7 @@ class AWEmbyPush(_PluginBase):
                     if self._wx_title_template:
                         title_text = self._render_template(self._wx_title_template, media)
                     if self._wx_body_template:
-                        desc_parts = [self._render_template(self._wx_body_template, media)]
+                        desc_parts = [_truncate(self._render_template(self._wx_body_template, media).replace("\r", ""), 500)]
                 payload = {
                     "touser": self._effective_wx_user_id, "msgtype": "news", "agentid": agent_id_val,
                     "news": {"articles": [{"title": title_text, "description": "\n".join(desc_parts),
