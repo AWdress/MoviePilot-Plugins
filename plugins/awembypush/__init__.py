@@ -1,6 +1,7 @@
 ﻿#!/usr/bin/python3
 # -*- coding: UTF-8 -*-
 import json
+import re
 import requests
 import traceback
 import threading
@@ -151,7 +152,7 @@ class AWEmbyPush(_PluginBase):
     plugin_name = "AWEmbyPush"
     plugin_desc = "原项目AWEmbyPush移植，监听 Emby/Jellyfin Webhook 入库事件，通过 Telegram / 企业微信 / Bark 发送精美媒体通知。支持TMDB元数据增强、剧集合并推送、消息去重。"
     plugin_icon = "https://raw.githubusercontent.com/AWdress/MoviePilot-Plugins/main/plugins/awembypush/logo.png"
-    plugin_version = "1.4.3"
+    plugin_version = "1.5.0"
     plugin_author = "AWdress"
     author_url = "https://github.com/AWdress/MoviePilot-Plugins"
     plugin_config_prefix = "awembypush_"
@@ -180,6 +181,12 @@ class AWEmbyPush(_PluginBase):
     _enable_tmdb: bool = True
     _dedup_window: int = 60
     _episode_cache_timeout: int = 30
+    _enable_custom_template: bool = False
+    _tg_template: str = ""
+    _wx_title_template: str = ""
+    _wx_body_template: str = ""
+    _bark_title_template: str = ""
+    _bark_body_template: str = ""
 
     _episode_cache: Optional[_EpisodeCache] = None
     _message_fingerprints: Dict[str, float] = {}
@@ -212,6 +219,12 @@ class AWEmbyPush(_PluginBase):
         self._enable_tmdb = config.get("enable_tmdb", True)
         self._dedup_window = int(config.get("dedup_window") or 60)
         self._episode_cache_timeout = int(config.get("episode_cache_timeout") or 30)
+        self._enable_custom_template = config.get("enable_custom_template", False)
+        self._tg_template = config.get("tg_template", "")
+        self._wx_title_template = config.get("wx_title_template", "")
+        self._wx_body_template = config.get("wx_body_template", "")
+        self._bark_title_template = config.get("bark_title_template", "")
+        self._bark_body_template = config.get("bark_body_template", "")
         self._episode_cache = _EpisodeCache(self._send_all_channels)
         self._episode_cache.CACHE_TIMEOUT = self._episode_cache_timeout
 
@@ -740,26 +753,56 @@ class AWEmbyPush(_PluginBase):
             return f"{base}/web/index.html#!/item?id={info.item_id}"
         return base or ""
 
+    def _template_context(self, media: dict) -> dict:
+        return {
+            "server_name": media.get("server_name", ""),
+            "status_text": media.get("status_text", ""),
+            "item_name": media.get("item_name", ""),
+            "episode_text": media.get("episode_text", ""),
+            "genres": media.get("genres", ""),
+            "cast": media.get("cast", ""),
+            "rating": media.get("rating", ""),
+            "release_date": media.get("release_date", ""),
+            "overview": media.get("overview", ""),
+            "play_url": media.get("play_url", ""),
+            "tmdb_url": media.get("tmdb_url", ""),
+            "channel": media.get("channel", ""),
+        }
+
+    def _render_template(self, template: str, media: dict) -> str:
+        if not template:
+            return ""
+        ctx = self._template_context(media)
+
+        def _replace(match):
+            key = match.group(1).strip()
+            return str(ctx.get(key, ""))
+
+        return re.sub(r"\{\{\s*([a-zA-Z0-9_]+)\s*\}\}", _replace, template)
+
     def _send_telegram(self, media: dict):
         type_text = media.get("genres") or ("剧集" if media.get("is_ep") else "电影")
         date_label = "📺 首播" if media.get("is_ep") else "🎬 上映"
         release_date = media.get("release_date", "") or "Unknown"
-        caption = f"<b>{media['server_name']} | {media['status_text']}</b>\n\n"
-        caption += "─────────────────────\n\n"
-        caption += f"<b>【{media['item_name']}】</b>\n"
-        if media["episode_text"]:
-            caption += f"{media['episode_text']} | 新更上线\n\n"
+        if self._enable_custom_template and self._tg_template:
+            caption = self._render_template(self._tg_template, media)
         else:
-            caption += "\n"
-        if media.get("cast"):
-            caption += f"👥 主演：{media['cast']}\n"
-        caption += f"📺 类型：{type_text}\n"
-        if media.get("rating"):
-            caption += f"⭐ 评分：{media['rating']}\n"
-        caption += f"{date_label}：{release_date}\n\n"
-        if media.get("overview"):
-            caption += f"📝 内容简介：\n<blockquote>{_truncate(media['overview'], 150)}</blockquote>\n\n"
-        caption += "─────────────────────"
+            caption = f"<b>{media['server_name']} | {media['status_text']}</b>\n\n"
+            caption += "─────────────────────\n\n"
+            caption += f"<b>【{media['item_name']}】</b>\n"
+            if media["episode_text"]:
+                caption += f"{media['episode_text']} | 新更上线\n\n"
+            else:
+                caption += "\n"
+            if media.get("cast"):
+                caption += f"👥 主演：{media['cast']}\n"
+            caption += f"📺 类型：{type_text}\n"
+            if media.get("rating"):
+                caption += f"⭐ 评分：{media['rating']}\n"
+            caption += f"{date_label}：{release_date}\n\n"
+            if media.get("overview"):
+                caption += f"📝 内容简介：\n<blockquote>{_truncate(media['overview'], 150)}</blockquote>\n\n"
+            caption += "─────────────────────"
         # 构建 InlineKeyboard 按钮（Telegram 仅支持 http/https URL）
         buttons = []
         play_url = media.get("play_url", "")
@@ -860,6 +903,14 @@ class AWEmbyPush(_PluginBase):
                     ),
                     "card_action": {"type": 1, "url": jump_url},
                 }
+                if self._enable_custom_template:
+                    if self._wx_title_template:
+                        card["main_title"]["title"] = self._render_template(self._wx_title_template, media)
+                    if self._wx_body_template:
+                        card["vertical_content_list"] = [{
+                            "title": "📝 自定义内容",
+                            "desc": _truncate(self._render_template(self._wx_body_template, media), 500),
+                        }]
                 payload = {"touser": self._effective_wx_user_id, "msgtype": "template_card",
                            "agentid": agent_id_val, "template_card": card}
             else:
@@ -875,6 +926,11 @@ class AWEmbyPush(_PluginBase):
                 desc_parts.append(f"{date_label}：{release_date}")
                 if media.get("overview"):
                     desc_parts.append(f"\n📝 内容简介：{_truncate(media['overview'], 100)}")
+                if self._enable_custom_template:
+                    if self._wx_title_template:
+                        title_text = self._render_template(self._wx_title_template, media)
+                    if self._wx_body_template:
+                        desc_parts = [self._render_template(self._wx_body_template, media)]
                 payload = {
                     "touser": self._effective_wx_user_id, "msgtype": "news", "agentid": agent_id_val,
                     "news": {"articles": [{"title": title_text, "description": "\n".join(desc_parts),
@@ -893,17 +949,20 @@ class AWEmbyPush(_PluginBase):
         type_text = media.get("genres") or ("剧集" if media.get("is_ep") else "电影")
         date_label = "📺 首播" if media.get("is_ep") else "🎬 上映"
         release_date = media.get("release_date", "") or "Unknown"
-        body = ""
-        if media.get("episode_text"):
-            body += f"{media['episode_text']} | 新更上线\n"
-        if media.get("cast"):
-            body += f"👥 主演：{media['cast']}\n"
-        body += f"📺 类型：{type_text}\n"
-        if media.get("rating"):
-            body += f"⭐ 评分：{media['rating']}\n"
-        body += f"{date_label}：{release_date}"
-        if media.get("overview"):
-            body += f"\n\n📝 {_truncate(media['overview'], 80)}"
+        if self._enable_custom_template and self._bark_body_template:
+            body = self._render_template(self._bark_body_template, media)
+        else:
+            body = ""
+            if media.get("episode_text"):
+                body += f"{media['episode_text']} | 新更上线\n"
+            if media.get("cast"):
+                body += f"👥 主演：{media['cast']}\n"
+            body += f"📺 类型：{type_text}\n"
+            if media.get("rating"):
+                body += f"⭐ 评分：{media['rating']}\n"
+            body += f"{date_label}：{release_date}"
+            if media.get("overview"):
+                body += f"\n\n📝 {_truncate(media['overview'], 80)}"
         url_target = (media.get("play_url") if (self._enable_watch_link and media.get("play_url"))
                       else media.get("tmdb_url", ""))
         server_icon = f"https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/{(media.get('channel') or 'emby').lower()}.png"
@@ -913,8 +972,11 @@ class AWEmbyPush(_PluginBase):
         # 分组：按剧集/电影分类
         group = "新剧速递" if media.get("is_ep") else "新片速递"
         for key in keys:
+            title = f"{media['server_name']} | {media['status_text']}\n【{media['item_name']}】"
+            if self._enable_custom_template and self._bark_title_template:
+                title = self._render_template(self._bark_title_template, media)
             payload = {
-                "title": f"{media['server_name']} | {media['status_text']}\n【{media['item_name']}】",
+                "title": title,
                 "body": body or "新内容已入库",
                 "icon": server_icon, "url": url_target, "device_key": key,
                 "group": group,
@@ -1085,7 +1147,73 @@ class AWEmbyPush(_PluginBase):
                         'placeholder': '30', 'type': 'number',
                         'hint': '等待此时间后合并同一电视剧的多集入库通知', 'persistent-hint': True}}]},
             ]},
+            {'component': 'VRow', 'props': {'class': 'mt-2'}, 'content': [
+                {'component': 'VCol', 'props': {'cols': 12}, 'content': [
+                    {'component': 'VSwitch', 'props': {
+                        'model': 'enable_custom_template',
+                        'label': '🧪 启用自定义推送模板（测试功能）',
+                        'color': 'warning',
+                        'hint': '测试中，不建议轻易在生产环境使用',
+                        'persistent-hint': True,
+                    }}]}]},
         ]
+
+        if self._enable_custom_template:
+            form_content.extend([
+                {'component': 'VRow', 'content': [
+                    {'component': 'VCol', 'props': {'cols': 12}, 'content': [
+                        {'component': 'VAlert', 'props': {
+                            'type': 'warning',
+                            'variant': 'tonal',
+                            'text': '⚠️ 自定义模板处于测试阶段，变量写错会导致样式异常，请谨慎使用。可用变量：{{server_name}} {{status_text}} {{item_name}} {{episode_text}} {{genres}} {{cast}} {{rating}} {{release_date}} {{overview}} {{play_url}} {{tmdb_url}}'
+                        }}]}]},
+                {'component': 'VRow', 'content': [
+                    {'component': 'VCol', 'props': {'cols': 12}, 'content': [
+                        {'component': 'VTextarea', 'props': {
+                            'model': 'tg_template',
+                            'label': 'Telegram 模板（HTML）',
+                            'rows': 4,
+                            'placeholder': '<b>{{server_name}} | {{status_text}}</b>\n<b>【{{item_name}}】</b>\n{{episode_text}}\n📺 {{genres}}\n⭐ {{rating}}',
+                            'hint': '启用后覆盖 Telegram 默认正文模板',
+                            'persistent-hint': True,
+                        }}]}]},
+                {'component': 'VRow', 'content': [
+                    {'component': 'VCol', 'props': {'cols': 12, 'md': 6}, 'content': [
+                        {'component': 'VTextarea', 'props': {
+                            'model': 'wx_title_template',
+                            'label': '企业微信标题模板',
+                            'rows': 3,
+                            'placeholder': '{{server_name}} | {{status_text}} | 【{{item_name}}】',
+                            'persistent-hint': True,
+                        }}]},
+                    {'component': 'VCol', 'props': {'cols': 12, 'md': 6}, 'content': [
+                        {'component': 'VTextarea', 'props': {
+                            'model': 'wx_body_template',
+                            'label': '企业微信正文模板',
+                            'rows': 3,
+                            'placeholder': '{{episode_text}}\n📺 {{genres}}\n👥 {{cast}}\n⭐ {{rating}}\n{{overview}}',
+                            'persistent-hint': True,
+                        }}]},
+                ]},
+                {'component': 'VRow', 'content': [
+                    {'component': 'VCol', 'props': {'cols': 12, 'md': 6}, 'content': [
+                        {'component': 'VTextarea', 'props': {
+                            'model': 'bark_title_template',
+                            'label': 'Bark 标题模板',
+                            'rows': 3,
+                            'placeholder': '{{server_name}} | {{status_text}}\n【{{item_name}}】',
+                            'persistent-hint': True,
+                        }}]},
+                    {'component': 'VCol', 'props': {'cols': 12, 'md': 6}, 'content': [
+                        {'component': 'VTextarea', 'props': {
+                            'model': 'bark_body_template',
+                            'label': 'Bark 正文模板',
+                            'rows': 3,
+                            'placeholder': '{{episode_text}}\n📺 {{genres}}\n⭐ {{rating}}\n{{overview}}',
+                            'persistent-hint': True,
+                        }}]},
+                ]},
+            ])
 
         form_content.extend(tg_rows)
         form_content.extend(wx_rows)
@@ -1114,7 +1242,10 @@ class AWEmbyPush(_PluginBase):
         ], {
             "enabled": False, "enable_watch_link": False, "watch_link_type": "server",
             "enable_tmdb": True, "dedup_window": 60, "episode_cache_timeout": 30,
+            "enable_custom_template": False,
             "use_mp_tg": True, "mp_tg_channel": "", "use_mp_wx": True, "mp_wx_channel": "",
+            "tg_template": "", "wx_title_template": "", "wx_body_template": "",
+            "bark_title_template": "", "bark_body_template": "",
             "tg_bot_token": "", "tg_chat_id": "", "tg_api_host": "",
             "wx_corp_id": "", "wx_corp_secret": "", "wx_agent_id": "",
             "wx_user_id": "@all", "wx_proxy_url": "", "wx_msg_type": "news_notice",
