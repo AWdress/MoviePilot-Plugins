@@ -154,7 +154,7 @@ class AWEmbyPush(_PluginBase):
     plugin_name = "AWEmbyPush"
     plugin_desc = "原项目AWEmbyPush移植，监听 Emby/Jellyfin Webhook 入库事件，通过 Telegram / 企业微信 / Bark 发送精美媒体通知。支持TMDB元数据增强、剧集合并推送、消息去重。"
     plugin_icon = "https://raw.githubusercontent.com/AWdress/MoviePilot-Plugins/main/plugins/awembypush/logo.png"
-    plugin_version = "1.5.2"
+    plugin_version = "1.5.3"
     plugin_author = "AWdress"
     author_url = "https://github.com/AWdress/MoviePilot-Plugins"
     plugin_config_prefix = "awembypush_"
@@ -325,7 +325,8 @@ class AWEmbyPush(_PluginBase):
             "<b>{{server_name}} | {{status_text}}</b>\n\n"
             "<b>【{{item_name}}】</b>\n{{episode_text}}\n\n"
             "👥 主演：{{cast}}\n📺 类型：{{genres}}\n⭐ 评分：{{rating}}\n📅 日期：{{release_date}}\n\n"
-            "📝 简介：\n<blockquote>{{overview}}</blockquote>"
+            "📝 简介：\n<blockquote>{{overview}}</blockquote>\n\n"
+            "▶️ 立即观看：{{play_url}}\nℹ️ 了解更多：{{tmdb_url}}"
         )
 
     @staticmethod
@@ -855,16 +856,20 @@ class AWEmbyPush(_PluginBase):
         buttons = []
         play_url = media.get("play_url", "")
         tmdb_url = media.get("tmdb_url", "")
+        using_custom = bool(self._enable_custom_template and self._tg_template)
         if self._enable_watch_link and play_url:
             if play_url.startswith(("http://", "https://")):
-                buttons.append({"text": "▶️ 立即观看", "url": play_url})
+                if not using_custom:
+                    buttons.append({"text": "▶️ 立即观看", "url": play_url})
             else:
                 redirect_url = self._build_redirect_url(play_url)
                 if redirect_url:
-                    buttons.append({"text": "▶️ 立即观看", "url": redirect_url})
-                else:
+                    if not using_custom:
+                        buttons.append({"text": "▶️ 立即观看", "url": redirect_url})
+                elif not using_custom:
+                    # 自定义模板含 {{play_url}} 已展示链接，不重复追加
                     caption += f"\n\n▶️ 立即观看：{html.escape(play_url)}"
-        if tmdb_url:
+        if tmdb_url and not using_custom:
             buttons.append({"text": "ℹ️ 了解更多", "url": tmdb_url})
         reply_markup = {"inline_keyboard": [buttons]} if buttons else None
         photo = media.get("image_url", "")
@@ -1005,12 +1010,12 @@ class AWEmbyPush(_PluginBase):
         type_text = media.get("genres") or ("剧集" if media.get("is_ep") else "电影")
         date_label = "📺 首播" if media.get("is_ep") else "🎬 上映"
         release_date = media.get("release_date", "") or "Unknown"
+        play_url_raw = media.get("play_url", "")
+        tmdb_url_raw = media.get("tmdb_url", "")
         if self._enable_custom_template and self._bark_body_template:
             body = self._render_template(self._bark_body_template, media)
         else:
             body = ""
-            if media.get("episode_text"):
-                body += f"{media['episode_text']} | 新更上线\n"
             if media.get("cast"):
                 body += f"👥 主演：{media['cast']}\n"
             body += f"📺 类型：{type_text}\n"
@@ -1019,8 +1024,16 @@ class AWEmbyPush(_PluginBase):
             body += f"{date_label}：{release_date}"
             if media.get("overview"):
                 body += f"\n\n📝 {_truncate(media['overview'], 80)}"
-        url_target = (media.get("play_url") if (self._enable_watch_link and media.get("play_url"))
-                      else media.get("tmdb_url", ""))
+            # 默认模板：追加带名称的链接
+            link_lines = ""
+            if self._enable_watch_link and play_url_raw:
+                link_lines += f"\n▶️ 立即观看：{play_url_raw}"
+            if tmdb_url_raw:
+                link_lines += f"\nℹ️ 了解更多：{tmdb_url_raw}"
+            if link_lines:
+                body += f"\n{link_lines}"
+        url_target = (play_url_raw if (self._enable_watch_link and play_url_raw)
+                      else tmdb_url_raw)
         # icon 换成影片海报，fallback 到项目 logo
         poster_icon = media.get("poster_url") or ""
         logo_icon = "https://raw.githubusercontent.com/AWdress/MoviePilot-Plugins/main/plugins/awembypush/logo.png"
@@ -1030,8 +1043,9 @@ class AWEmbyPush(_PluginBase):
         image_url = media.get("image_url") or media.get("poster_url") or ""
         # 分组：按剧集/电影分类
         group = "新剧速递" if media.get("is_ep") else "新片速递"
-        # subtitle：剧集显示季集信息，电影显示类型
-        subtitle = media.get("episode_text") or media.get("genres") or ""
+        # subtitle：剧集显示"季集 | 新更上线"，电影显示类型
+        ep_text = media.get("episode_text") or ""
+        subtitle = f"{ep_text} | 新更上线" if ep_text else (media.get("genres") or "")
         for key in keys:
             title = f"{media['server_name']} | {media['status_text']}\n【{media['item_name']}】"
             if self._enable_custom_template and self._bark_title_template:
