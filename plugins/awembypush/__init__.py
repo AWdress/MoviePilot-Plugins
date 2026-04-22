@@ -154,7 +154,7 @@ class AWEmbyPush(_PluginBase):
     plugin_name = "AWEmbyPush"
     plugin_desc = "原项目AWEmbyPush移植，监听 Emby/Jellyfin Webhook 入库事件，通过 Telegram / 企业微信 / Bark 发送精美媒体通知。支持TMDB元数据增强、剧集合并推送、消息去重。"
     plugin_icon = "https://raw.githubusercontent.com/AWdress/MoviePilot-Plugins/main/plugins/awembypush/logo.png"
-    plugin_version = "1.5.1"
+    plugin_version = "1.5.2"
     plugin_author = "AWdress"
     author_url = "https://github.com/AWdress/MoviePilot-Plugins"
     plugin_config_prefix = "awembypush_"
@@ -1021,12 +1021,17 @@ class AWEmbyPush(_PluginBase):
                 body += f"\n\n📝 {_truncate(media['overview'], 80)}"
         url_target = (media.get("play_url") if (self._enable_watch_link and media.get("play_url"))
                       else media.get("tmdb_url", ""))
-        server_icon = f"https://cdn.jsdelivr.net/gh/walkxcode/dashboard-icons/png/{(media.get('channel') or 'emby').lower()}.png"
+        # icon 换成影片海报，fallback 到项目 logo
+        poster_icon = media.get("poster_url") or ""
+        logo_icon = "https://raw.githubusercontent.com/AWdress/MoviePilot-Plugins/main/plugins/awembypush/logo.png"
+        icon_url = poster_icon or logo_icon
         keys = [k.strip() for k in self._bark_keys.split(",") if k.strip()]
         # 选取缩略图：剧集优先 still > backdrop > poster
         image_url = media.get("image_url") or media.get("poster_url") or ""
         # 分组：按剧集/电影分类
         group = "新剧速递" if media.get("is_ep") else "新片速递"
+        # subtitle：剧集显示季集信息，电影显示类型
+        subtitle = media.get("episode_text") or media.get("genres") or ""
         for key in keys:
             title = f"{media['server_name']} | {media['status_text']}\n【{media['item_name']}】"
             if self._enable_custom_template and self._bark_title_template:
@@ -1034,9 +1039,11 @@ class AWEmbyPush(_PluginBase):
             payload = {
                 "title": title,
                 "body": body or "新内容已入库",
-                "icon": server_icon, "url": url_target, "device_key": key,
+                "icon": icon_url, "url": url_target, "device_key": key,
                 "group": group,
             }
+            if subtitle:
+                payload["subtitle"] = subtitle
             if image_url:
                 payload["image"] = image_url
             try:
