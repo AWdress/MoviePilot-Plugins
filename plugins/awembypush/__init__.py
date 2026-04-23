@@ -154,7 +154,7 @@ class AWEmbyPush(_PluginBase):
     plugin_name = "AWEmbyPush"
     plugin_desc = "原项目AWEmbyPush移植，监听 Emby/Jellyfin Webhook 入库事件，通过 Telegram / 企业微信 / Bark 发送精美媒体通知。支持TMDB元数据增强、剧集合并推送、消息去重。"
     plugin_icon = "https://raw.githubusercontent.com/AWdress/MoviePilot-Plugins/main/plugins/awembypush/logo.png"
-    plugin_version = "1.5.3"
+    plugin_version = "1.5.4"
     plugin_author = "AWdress"
     author_url = "https://github.com/AWdress/MoviePilot-Plugins"
     plugin_config_prefix = "awembypush_"
@@ -1024,10 +1024,11 @@ class AWEmbyPush(_PluginBase):
             body += f"{date_label}：{release_date}"
             if media.get("overview"):
                 body += f"\n\n📝 {_truncate(media['overview'], 80)}"
-            # 默认模板：追加带名称的链接
+            # 默认模板：只追加 http/https 链接（可点击），非 http 链接仅用作点击通知的跳转
             link_lines = ""
             if self._enable_watch_link and play_url_raw:
-                link_lines += f"\n▶️ 立即观看：{play_url_raw}"
+                if play_url_raw.startswith(("http://", "https://")):
+                    link_lines += f"\n▶️ 立即观看：{play_url_raw}"
             if tmdb_url_raw:
                 link_lines += f"\nℹ️ 了解更多：{tmdb_url_raw}"
             if link_lines:
@@ -1047,7 +1048,7 @@ class AWEmbyPush(_PluginBase):
         ep_text = media.get("episode_text") or ""
         subtitle = f"{ep_text} | 新更上线" if ep_text else (media.get("genres") or "")
         for key in keys:
-            title = f"{media['server_name']} | {media['status_text']}\n【{media['item_name']}】"
+            title = f"{media['server_name']} | {media['status_text']}\n\n【{media['item_name']}】"
             if self._enable_custom_template and self._bark_title_template:
                 title = self._render_template(self._bark_title_template, media)
             payload = {
