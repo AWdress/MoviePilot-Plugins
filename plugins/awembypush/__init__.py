@@ -154,7 +154,7 @@ class AWEmbyPush(_PluginBase):
     plugin_name = "AWEmbyPush"
     plugin_desc = "原项目AWEmbyPush移植，监听 Emby/Jellyfin Webhook 入库事件，通过 Telegram / 企业微信 / Bark 发送精美媒体通知。支持TMDB元数据增强、剧集合并推送、消息去重。"
     plugin_icon = "https://raw.githubusercontent.com/AWdress/MoviePilot-Plugins/main/plugins/awembypush/logo.png"
-    plugin_version = "1.5.4"
+    plugin_version = "1.5.5"
     plugin_author = "AWdress"
     author_url = "https://github.com/AWdress/MoviePilot-Plugins"
     plugin_config_prefix = "awembypush_"
@@ -373,7 +373,94 @@ class AWEmbyPush(_PluginBase):
             "methods": ["GET"],
             "summary": "获取 MP 通知渠道列表",
             "description": "返回 MP 内置的 Telegram / 企业微信通知渠道名称"
+        }, {
+            "path": "/config",
+            "endpoint": self._get_config,
+            "auth": "bear",
+            "methods": ["GET"],
+            "summary": "获取配置",
+        }, {
+            "path": "/config",
+            "endpoint": self._save_config,
+            "auth": "bear",
+            "methods": ["POST"],
+            "summary": "保存配置",
         }]
+
+    def _get_config(self) -> Dict[str, Any]:
+        """获取当前配置"""
+        return {
+            "enabled": self._enabled,
+            "use_mp_tg": self._use_mp_tg,
+            "mp_tg_channel": self._mp_tg_channel,
+            "use_mp_wx": self._use_mp_wx,
+            "mp_wx_channel": self._mp_wx_channel,
+            "enable_watch_link": self._enable_watch_link,
+            "watch_link_type": self._watch_link_type,
+            "link_redirect_prefix": self._link_redirect_prefix,
+            "enable_tmdb": self._enable_tmdb,
+            "dedup_window": self._dedup_window,
+            "episode_cache_timeout": self._episode_cache_timeout,
+            "enable_custom_template": self._enable_custom_template,
+            "tg_template": self._tg_template,
+            "wx_title_template": self._wx_title_template,
+            "wx_body_template": self._wx_body_template,
+            "bark_title_template": self._bark_title_template,
+            "bark_body_template": self._bark_body_template,
+            "tg_bot_token": self._tg_bot_token,
+            "tg_chat_id": self._tg_chat_id,
+            "tg_api_host": self._tg_api_host,
+            "wx_corp_id": self._wx_corp_id,
+            "wx_corp_secret": self._wx_corp_secret,
+            "wx_agent_id": self._wx_agent_id,
+            "wx_user_id": self._wx_user_id,
+            "wx_proxy_url": self._wx_proxy_url,
+            "wx_msg_type": self._wx_msg_type,
+            "bark_server": self._bark_server,
+            "bark_keys": self._bark_keys,
+            "emby_server_url": self._emby_server_url,
+        }
+
+    def _save_config(self, config_payload: dict) -> Dict[str, Any]:
+        """保存配置"""
+        try:
+            config_payload = config_payload or {}
+            new_config = {
+                "enabled": bool(config_payload.get("enabled", self._enabled)),
+                "use_mp_tg": bool(config_payload.get("use_mp_tg", self._use_mp_tg)),
+                "mp_tg_channel": (config_payload.get("mp_tg_channel") or "").strip(),
+                "use_mp_wx": bool(config_payload.get("use_mp_wx", self._use_mp_wx)),
+                "mp_wx_channel": (config_payload.get("mp_wx_channel") or "").strip(),
+                "enable_watch_link": bool(config_payload.get("enable_watch_link", self._enable_watch_link)),
+                "watch_link_type": (config_payload.get("watch_link_type") or self._watch_link_type).strip(),
+                "link_redirect_prefix": (config_payload.get("link_redirect_prefix") or "").strip(),
+                "enable_tmdb": bool(config_payload.get("enable_tmdb", self._enable_tmdb)),
+                "dedup_window": int(config_payload.get("dedup_window") or self._dedup_window or 60),
+                "episode_cache_timeout": int(config_payload.get("episode_cache_timeout") or self._episode_cache_timeout or 30),
+                "enable_custom_template": bool(config_payload.get("enable_custom_template", self._enable_custom_template)),
+                "tg_template": (config_payload.get("tg_template") or "").strip(),
+                "wx_title_template": (config_payload.get("wx_title_template") or "").strip(),
+                "wx_body_template": (config_payload.get("wx_body_template") or "").strip(),
+                "bark_title_template": (config_payload.get("bark_title_template") or "").strip(),
+                "bark_body_template": (config_payload.get("bark_body_template") or "").strip(),
+                "tg_bot_token": (config_payload.get("tg_bot_token") or "").strip(),
+                "tg_chat_id": (config_payload.get("tg_chat_id") or "").strip(),
+                "tg_api_host": (config_payload.get("tg_api_host") or "").strip(),
+                "wx_corp_id": (config_payload.get("wx_corp_id") or "").strip(),
+                "wx_corp_secret": (config_payload.get("wx_corp_secret") or "").strip(),
+                "wx_agent_id": (config_payload.get("wx_agent_id") or "").strip(),
+                "wx_user_id": (config_payload.get("wx_user_id") or "").strip(),
+                "wx_proxy_url": (config_payload.get("wx_proxy_url") or "").strip(),
+                "wx_msg_type": (config_payload.get("wx_msg_type") or self._wx_msg_type).strip(),
+                "bark_server": (config_payload.get("bark_server") or "").strip(),
+                "bark_keys": (config_payload.get("bark_keys") or "").strip(),
+                "emby_server_url": (config_payload.get("emby_server_url") or "").strip(),
+            }
+            self.update_config(new_config)
+            return {"code": 0, "message": "success"}
+        except Exception as e:
+            logger.error(f"AWEmbyPush 保存配置失败：{e}")
+            return {"code": 1, "message": str(e)}
 
     def _api_mp_channels(self):
         """返回 MP 已配置的通知渠道列表，供前端下拉框使用"""
@@ -1071,323 +1158,20 @@ class AWEmbyPush(_PluginBase):
             except Exception as e:
                 logger.error(f"AWEmbyPush Bark ({key[:8]}...) 发送异常：{e}")
 
+    def get_render_mode(self) -> Tuple[str, Optional[str]]:
+        """
+        返回 Vue 渲染模式。
+        """
+        return "vue", "dist/assets"
+
     def get_form(self) -> Tuple[List[dict], Dict[str, Any]]:
-        # 动态获取 MP 已配置的通知渠道
-        tg_items = []
-        wx_items = []
-        try:
-            notifications = self.systemconfig.get(SystemConfigKey.Notifications) or []
-            for n in notifications:
-                if not n.get("enabled"):
-                    continue
-                name = n.get("name", "")
-                if n.get("type") == "telegram" and name:
-                    tg_items.append({"title": name, "value": name})
-                elif n.get("type") == "wechat" and name:
-                    wx_items.append({"title": name, "value": name})
-        except Exception:
-            pass
-
-        # ── 构建 Telegram 区块 ──
-        tg_rows = [
-            {'component': 'VRow', 'props': {'class': 'mt-4'}, 'content': [
-                {'component': 'VCol', 'props': {'cols': 12}, 'content': [
-                    {'component': 'VAlert', 'props': {
-                        'type': 'success', 'variant': 'tonal',
-                        'text': '📬 Telegram 通知配置'}}]}]},
-            {'component': 'VRow', 'content': [
-                {'component': 'VCol', 'props': {'cols': 12, 'md': 6}, 'content': [
-                    {'component': 'VSwitch', 'props': {
-                        'model': 'use_mp_tg', 'label': '使用 MP 内置 TG 配置', 'color': 'success',
-                        'hint': '保存后刷新页面生效', 'persistent-hint': True}}]},
-                {'component': 'VCol', 'props': {'cols': 12, 'md': 6}, 'content': [
-                    {'component': 'VSelect', 'props': {
-                        'model': 'mp_tg_channel', 'label': '选择 TG 通知渠道',
-                        'items': tg_items,
-                        'hint': f'检测到 {len(tg_items)} 个已启用的 Telegram 渠道' if tg_items else '未检测到已启用的 Telegram 渠道',
-                        'persistent-hint': True}}]},
-            ]},
-        ]
-        if not self._use_mp_tg:
-            tg_rows.append(
-                {'component': 'VRow', 'content': [
-                    {'component': 'VCol', 'props': {'cols': 12, 'md': 4}, 'content': [
-                        {'component': 'VTextField', 'props': {
-                            'model': 'tg_bot_token', 'label': 'Bot Token',
-                            'hint': '通过 @BotFather 获取', 'persistent-hint': True}}]},
-                    {'component': 'VCol', 'props': {'cols': 12, 'md': 4}, 'content': [
-                        {'component': 'VTextField', 'props': {
-                            'model': 'tg_chat_id', 'label': 'Chat ID',
-                            'hint': '目标用户或群组 ID', 'persistent-hint': True}}]},
-                    {'component': 'VCol', 'props': {'cols': 12, 'md': 4}, 'content': [
-                        {'component': 'VTextField', 'props': {
-                            'model': 'tg_api_host', 'label': 'API Host',
-                            'placeholder': 'https://api.telegram.org',
-                            'hint': '自建反代可修改，默认官方地址', 'persistent-hint': True}}]},
-                ]}
-            )
-
-        # ── 构建企业微信区块 ──
-        wx_rows = [
-            {'component': 'VRow', 'props': {'class': 'mt-4'}, 'content': [
-                {'component': 'VCol', 'props': {'cols': 12}, 'content': [
-                    {'component': 'VAlert', 'props': {
-                        'type': 'warning', 'variant': 'tonal',
-                        'text': '💼 企业微信通知配置'}}]}]},
-            {'component': 'VRow', 'content': [
-                {'component': 'VCol', 'props': {'cols': 12, 'md': 6}, 'content': [
-                    {'component': 'VSwitch', 'props': {
-                        'model': 'use_mp_wx', 'label': '使用 MP 内置微信配置', 'color': 'warning',
-                        'hint': '保存后刷新页面生效', 'persistent-hint': True}}]},
-                {'component': 'VCol', 'props': {'cols': 12, 'md': 6}, 'content': [
-                    {'component': 'VSelect', 'props': {
-                        'model': 'mp_wx_channel', 'label': '选择微信通知渠道',
-                        'items': wx_items,
-                        'hint': f'检测到 {len(wx_items)} 个已启用的企业微信渠道' if wx_items else '未检测到已启用的企业微信渠道',
-                        'persistent-hint': True}}]},
-            ]},
-        ]
-        if not self._use_mp_wx:
-            wx_rows.append(
-                {'component': 'VRow', 'content': [
-                    {'component': 'VCol', 'props': {'cols': 12, 'md': 4}, 'content': [
-                        {'component': 'VTextField', 'props': {'model': 'wx_corp_id', 'label': 'Corp ID',
-                            'hint': '企业 ID', 'persistent-hint': True}}]},
-                    {'component': 'VCol', 'props': {'cols': 12, 'md': 4}, 'content': [
-                        {'component': 'VTextField', 'props': {'model': 'wx_corp_secret', 'label': 'Corp Secret',
-                            'hint': '应用密钥', 'persistent-hint': True}}]},
-                    {'component': 'VCol', 'props': {'cols': 12, 'md': 4}, 'content': [
-                        {'component': 'VTextField', 'props': {'model': 'wx_agent_id', 'label': 'Agent ID',
-                            'hint': '应用 ID', 'persistent-hint': True}}]},
-                ]}
-            )
-        # 消息类型 + 可选手动字段
-        wx_rows.append(
-            {'component': 'VRow', 'content': [
-                {'component': 'VCol', 'props': {'cols': 12, 'md': 6}, 'content': [
-                    {'component': 'VSelect', 'props': {
-                        'model': 'wx_msg_type', 'label': '消息类型',
-                        'items': [
-                            {'title': '卡片 (news_notice) - 不支持微信插件', 'value': 'news_notice'},
-                            {'title': '图文 (news) - 支持微信插件', 'value': 'news'},
-                        ],
-                        'hint': '微信插件仅支持图文(news)格式', 'persistent-hint': True}}]},
-            ] + ([
-                {'component': 'VCol', 'props': {'cols': 12, 'md': 3}, 'content': [
-                    {'component': 'VTextField', 'props': {'model': 'wx_user_id', 'label': '接收用户',
-                        'placeholder': '@all', 'hint': '默认推送全员', 'persistent-hint': True}}]},
-                {'component': 'VCol', 'props': {'cols': 12, 'md': 3}, 'content': [
-                    {'component': 'VTextField', 'props': {'model': 'wx_proxy_url', 'label': '代理地址',
-                        'placeholder': 'https://qyapi.weixin.qq.com',
-                        'hint': '自建代理可修改', 'persistent-hint': True}}]},
-            ] if not self._use_mp_wx else [])}
-        )
-
-        # ── 组装完整表单 ──
-        form_content = [
-            {'component': 'VRow', 'content': [
-                {'component': 'VCol', 'props': {'cols': 6, 'md': 3}, 'content': [
-                    {'component': 'VSwitch', 'props': {'model': 'enabled', 'label': '启用插件', 'color': 'primary'}}]},
-                {'component': 'VCol', 'props': {'cols': 6, 'md': 3}, 'content': [
-                    {'component': 'VSwitch', 'props': {'model': 'enable_tmdb', 'label': 'TMDB 增强', 'color': 'primary'}}]},
-                {'component': 'VCol', 'props': {'cols': 6, 'md': 3}, 'content': [
-                    {'component': 'VSwitch', 'props': {'model': 'enable_watch_link', 'label': '观看按钮', 'color': 'primary'}}]},
-                {'component': 'VCol', 'props': {'cols': 6, 'md': 3}, 'content': [
-                    {'component': 'VSelect', 'props': {
-                        'model': 'watch_link_type', 'label': '播放链接类型',
-                        'items': [
-                            {'title': 'Emby/Jellyfin 直链', 'value': 'server'},
-                            {'title': 'Forward App', 'value': 'forward'},
-                            {'title': 'Infuse', 'value': 'infuse'},
-                        ]}}]},
-            ]},
-            {'component': 'VRow', 'content': [
-                {'component': 'VCol', 'props': {'cols': 12}, 'content': [
-                    {'component': 'VAlert', 'props': {
-                        'type': 'info', 'variant': 'tonal', 'style': 'font-size: 13px;',
-                        'text': '📡 Webhook 地址：http(s)://MP地址:3001/api/v1/plugin/AWEmbyPush/webhook?apikey=你的API密钥\n📌 Emby/Jellyfin 中请求内容类型请选择 application/json'
-                    }}]}]},
-            {'component': 'VRow', 'content': [
-                {'component': 'VCol', 'props': {'cols': 12}, 'content': [
-                    {'component': 'VTextField', 'props': {
-                        'model': 'emby_server_url', 'label': '🖥️ Emby/Jellyfin 服务器地址',
-                        'placeholder': 'https://your-emby-server.com',
-                        'hint': '用于生成播放链接（开启"观看按钮"时需填写）', 'persistent-hint': True}}]}]},
-            {'component': 'VRow', 'content': [
-                {'component': 'VCol', 'props': {'cols': 12}, 'content': [
-                    {'component': 'VTextField', 'props': {
-                        'model': 'link_redirect_prefix', 'label': '🔗 TG/微信 非HTTP链接中转前缀（可选）',
-                        'placeholder': 'https://your-domain.com/open?url={url}',
-                        'hint': '用于将 infuse:// 等协议包装成 http 按钮链接，支持 {url} 占位符（TG/微信通用）', 'persistent-hint': True}}]}]},
-            {'component': 'VRow', 'content': [
-                {'component': 'VCol', 'props': {'cols': 12, 'md': 6}, 'content': [
-                    {'component': 'VTextField', 'props': {
-                        'model': 'dedup_window', 'label': '⏱️ 消息去重窗口（秒）',
-                        'placeholder': '60', 'type': 'number',
-                        'hint': '同一媒体在此时间内不重复处理', 'persistent-hint': True}}]},
-                {'component': 'VCol', 'props': {'cols': 12, 'md': 6}, 'content': [
-                    {'component': 'VTextField', 'props': {
-                        'model': 'episode_cache_timeout', 'label': '⏱️ 剧集合并等待（秒）',
-                        'placeholder': '30', 'type': 'number',
-                        'hint': '等待此时间后合并同一电视剧的多集入库通知', 'persistent-hint': True}}]},
-            ]},
-            {'component': 'VRow', 'props': {'class': 'mt-2'}, 'content': [
-                {'component': 'VCol', 'props': {'cols': 12}, 'content': [
-                    {'component': 'VSwitch', 'props': {
-                        'model': 'enable_custom_template',
-                        'label': '🧪 启用自定义推送模板（测试功能）',
-                        'color': 'warning',
-                        'hint': '测试中，不建议轻易在生产环境使用',
-                        'persistent-hint': True,
-                    }}]}]},
-        ]
-
-        if self._enable_custom_template:
-            form_content.extend([
-                {'component': 'VRow', 'content': [
-                    {'component': 'VCol', 'props': {'cols': 12}, 'content': [
-                        {'component': 'VAlert', 'props': {
-                            'type': 'warning',
-                            'variant': 'tonal',
-                            'text': '⚠️ 自定义模板处于测试阶段，请谨慎使用。'}}]}]},
-                {'component': 'VRow', 'content': [
-                    {'component': 'VCol', 'props': {'cols': 12}, 'content': [
-                        {'component': 'VAlert', 'props': {
-                            'type': 'info',
-                            'variant': 'tonal',
-                            'text': '变量说明\n{{server_name}} 媒体服务器名\n{{status_text}} 新片/新剧速递\n{{item_name}} 媒体标题\n{{episode_text}} 季集信息\n{{genres}} 类型\n{{cast}} 主演\n{{rating}} 评分\n{{release_date}} 上映/首播日期\n{{overview}} 简介\n{{play_url}} 播放链接\n{{tmdb_url}} TMDB 链接'}}]}]},
-                {'component': 'VRow', 'props': {'class': 'mt-2'}, 'content': [
-                    {'component': 'VCol', 'props': {'cols': 12}, 'content': [
-                        {'component': 'VTextarea', 'props': {
-                            'model': 'tg_template',
-                            'label': 'Telegram 模板（HTML）',
-                            'rows': 5,
-                            'placeholder': '<b>{{server_name}} | {{status_text}}</b>\n<b>【{{item_name}}】</b>\n{{episode_text}}\n📺 {{genres}}\n⭐ {{rating}}',
-                            'hint': '默认模板已预置，修改后将覆盖 Telegram 默认正文模板',
-                            'persistent-hint': True,
-                        }}]}]},
-                {'component': 'VRow', 'props': {'class': 'mt-2'}, 'content': [
-                    {'component': 'VCol', 'props': {'cols': 12}, 'content': [
-                        {'component': 'VAlert', 'props': {'type': 'warning', 'variant': 'tonal', 'text': '💼 企业微信模板'}}]}]},
-                {'component': 'VRow', 'content': [
-                    {'component': 'VCol', 'props': {'cols': 12}, 'content': [
-                        {'component': 'VTextarea', 'props': {
-                            'model': 'wx_title_template',
-                            'label': '企业微信标题模板',
-                            'rows': 3,
-                            'placeholder': '{{server_name}} | {{status_text}} | 【{{item_name}}】',
-                            'hint': '默认模板已预置，可直接微调',
-                            'persistent-hint': True,
-                        }}]}]},
-                {'component': 'VRow', 'content': [
-                    {'component': 'VCol', 'props': {'cols': 12}, 'content': [
-                        {'component': 'VTextarea', 'props': {
-                            'model': 'wx_body_template',
-                            'label': '企业微信正文模板',
-                            'rows': 4,
-                            'placeholder': '{{episode_text}}\n📺 {{genres}}\n👥 {{cast}}\n⭐ {{rating}}\n{{overview}}',
-                            'hint': '默认模板已预置，可直接微调',
-                            'persistent-hint': True,
-                        }}]}]},
-                {'component': 'VRow', 'props': {'class': 'mt-2'}, 'content': [
-                    {'component': 'VCol', 'props': {'cols': 12}, 'content': [
-                        {'component': 'VAlert', 'props': {'type': 'error', 'variant': 'tonal', 'text': '🔔 Bark 模板'}}]}]},
-                {'component': 'VRow', 'content': [
-                    {'component': 'VCol', 'props': {'cols': 12}, 'content': [
-                        {'component': 'VTextarea', 'props': {
-                            'model': 'bark_title_template',
-                            'label': 'Bark 标题模板',
-                            'rows': 3,
-                            'placeholder': '{{server_name}} | {{status_text}}\n【{{item_name}}】',
-                            'hint': '默认模板已预置，可直接微调',
-                            'persistent-hint': True,
-                        }}]}]},
-                {'component': 'VRow', 'content': [
-                    {'component': 'VCol', 'props': {'cols': 12}, 'content': [
-                        {'component': 'VTextarea', 'props': {
-                            'model': 'bark_body_template',
-                            'label': 'Bark 正文模板',
-                            'rows': 4,
-                            'placeholder': '{{episode_text}}\n📺 {{genres}}\n⭐ {{rating}}\n{{overview}}',
-                            'hint': '默认模板已预置，可直接微调',
-                            'persistent-hint': True,
-                        }}]}]},
-            ])
-
-        form_content.extend(tg_rows)
-        form_content.extend(wx_rows)
-
-        # ── Bark 配置 ──
-        form_content.extend([
-            {'component': 'VRow', 'props': {'class': 'mt-4'}, 'content': [
-                {'component': 'VCol', 'props': {'cols': 12}, 'content': [
-                    {'component': 'VAlert', 'props': {
-                        'type': 'error', 'variant': 'tonal',
-                        'text': '🔔 Bark 通知配置（iOS）'}}]}]},
-            {'component': 'VRow', 'content': [
-                {'component': 'VCol', 'props': {'cols': 12, 'md': 4}, 'content': [
-                    {'component': 'VTextField', 'props': {'model': 'bark_server', 'label': 'Bark 服务器',
-                        'placeholder': 'https://api.day.app',
-                        'hint': '自建服务器可修改', 'persistent-hint': True}}]},
-                {'component': 'VCol', 'props': {'cols': 12, 'md': 8}, 'content': [
-                    {'component': 'VTextField', 'props': {'model': 'bark_keys', 'label': '设备 Key',
-                        'placeholder': '多个 Key 用英文逗号分隔',
-                        'hint': '留空则不启用 Bark 推送', 'persistent-hint': True}}]},
-            ]},
-        ])
-
-        return [
-            {'component': 'VForm', 'content': form_content}
-        ], {
-            "enabled": False, "enable_watch_link": False, "watch_link_type": "server",
-            "link_redirect_prefix": "",
-            "enable_tmdb": True, "dedup_window": 60, "episode_cache_timeout": 30,
-            "enable_custom_template": False,
-            "use_mp_tg": True, "mp_tg_channel": "", "use_mp_wx": True, "mp_wx_channel": "",
-            "tg_template": self._default_tg_template(),
-            "wx_title_template": self._default_wx_title_template(),
-            "wx_body_template": self._default_wx_body_template(),
-            "bark_title_template": self._default_bark_title_template(),
-            "bark_body_template": self._default_bark_body_template(),
-            "tg_bot_token": "", "tg_chat_id": "", "tg_api_host": "",
-            "wx_corp_id": "", "wx_corp_secret": "", "wx_agent_id": "",
-            "wx_user_id": "@all", "wx_proxy_url": "", "wx_msg_type": "news_notice",
-            "bark_server": "https://api.day.app", "bark_keys": "", "emby_server_url": "",
-        }
+        """
+        Vue 模式下返回空表单与初始配置。
+        """
+        return None, self._get_config()
 
     def get_page(self) -> List[dict]:
-        cards: List[dict] = self.get_data("recent_cards") or []
-        if not cards:
-            return [{'component': 'div', 'props': {'class': 'text-center'}, 'text': '暂无推送记录'}]
-        contents = []
-        for card in reversed(cards):
-            is_ep = card.get("item_type") in ["TV", "SHOW"]
-            subtitle_parts = []
-            if card.get("episode_text"):
-                subtitle_parts.append(card["episode_text"])
-            elif is_ep and card.get("season_id"):
-                ep_str = f"S{str(card['season_id']).zfill(2)}"
-                if card.get("episode_id"):
-                    ep_str += f"E{str(card['episode_id']).zfill(2)}"
-                subtitle_parts.append(ep_str)
-            if card.get("channels"):
-                subtitle_parts.append(f"📡 {card['channels']}")
-            subtitle = "  |  ".join(subtitle_parts)
-            contents.append({
-                'component': 'VCard', 'props': {'variant': 'tonal'},
-                'content': [{'component': 'div',
-                    'props': {'class': 'd-flex justify-space-start flex-nowrap flex-row'},
-                    'content': [
-                        {'component': 'div', 'content': [{'component': 'VImg', 'props': {
-                            'src': card.get("image_url", ""), 'height': 120, 'width': 80,
-                            'aspect-ratio': '2/3', 'class': 'object-cover shadow ring-gray-500', 'cover': True}}]},
-                        {'component': 'div', 'props': {'class': 'flex-1 min-w-0'}, 'content': [
-                            {'component': 'VCardTitle',
-                             'props': {'class': 'ps-2 pe-2 break-words whitespace-break-spaces'},
-                             'text': card.get("item_name", "")},
-                            {'component': 'VCardText', 'props': {'class': 'pa-0 px-2 text-caption'},
-                             'text': subtitle},
-                            {'component': 'VCardText', 'props': {'class': 'pa-0 px-2 text-caption'},
-                             'text': f"🕐 {card.get('time', '')}  {card.get('channel', '').upper()}"},
-                        ]}]}]})
-        return [{'component': 'div', 'props': {'class': 'grid gap-3 grid-info-card'}, 'content': contents}]
+        """
+        Vue 模式下返回空页面。
+        """
+        return []
