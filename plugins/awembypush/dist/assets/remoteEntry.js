@@ -1,4 +1,4 @@
-const scriptRel = 'modulepreload';const assetsURL = function(dep) { return "/"+dep };const seen$1 = {};const __vitePreload = function preload(baseModule, deps, importerUrl) {
+const scriptRel = 'modulepreload';const assetsURL = function(dep, importerUrl) { return new URL(dep, importerUrl).href };const seen$1 = {};const __vitePreload = function preload(baseModule, deps, importerUrl) {
     // @ts-expect-error true will be replaced with boolean later
     if (!true || !deps || deps.length === 0) {
         return baseModule();
@@ -6,7 +6,7 @@ const scriptRel = 'modulepreload';const assetsURL = function(dep) { return "/"+d
     const links = document.getElementsByTagName('link');
     return Promise.all(deps.map((dep) => {
         // @ts-expect-error assetsURL is declared before preload.toString()
-        dep = assetsURL(dep);
+        dep = assetsURL(dep, importerUrl);
         if (dep in seen$1)
             return;
         seen$1[dep] = true;
@@ -60,11 +60,11 @@ const currentImports = {};
       const exportSet = new Set(['Module', '__esModule', 'default', '_export_sfc']);
       let moduleMap = {
 "./Page":()=>{
-      dynamicLoadingCss([], false, './Page');
-      return __federation_import('./__federation_expose_Page-57f420bf.js').then(module =>Object.keys(module).every(item => exportSet.has(item)) ? () => module.default : () => module)},
+      dynamicLoadingCss(["style-61336fd9.css"], false, './Page');
+      return __federation_import('./assets/__federation_expose_Page-57f420bf.js').then(module =>Object.keys(module).every(item => exportSet.has(item)) ? () => module.default : () => module)},
 "./Config":()=>{
-      dynamicLoadingCss([], false, './Config');
-      return __federation_import('./__federation_expose_Config-b2cf0bb4.js').then(module =>Object.keys(module).every(item => exportSet.has(item)) ? () => module.default : () => module)},};
+      dynamicLoadingCss(["style-61336fd9.css"], false, './Config');
+      return __federation_import('./assets/__federation_expose_Config-b2cf0bb4.js').then(module =>Object.keys(module).every(item => exportSet.has(item)) ? () => module.default : () => module)},};
       const seen = {};
       const dynamicLoadingCss = (cssFilePaths, dontAppendStylesToHead, exposeItemName) => {
         const metaUrl = import.meta.url;
@@ -74,7 +74,7 @@ const currentImports = {};
         }
 
         const curUrl = metaUrl.substring(0, metaUrl.lastIndexOf('remoteEntry.js'));
-        const base = '/';
+        const base = './';
         'assets';
 
         cssFilePaths.forEach(cssPath => {
@@ -121,7 +121,7 @@ const currentImports = {};
         });
       };
       async function __federation_import(name) {
-        currentImports[name] ??= __vitePreload(() => import(name),true?[]:void 0);
+        currentImports[name] ??= __vitePreload(() => import(name),true?[]:void 0,import.meta.url);
         return currentImports[name]
       }      const get =(module) => {
         if(!moduleMap[module]) throw new Error('Can not find remote module ' + module)
