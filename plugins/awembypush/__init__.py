@@ -154,7 +154,7 @@ class AWEmbyPush(_PluginBase):
     plugin_name = "AWEmbyPush"
     plugin_desc = "原项目AWEmbyPush移植，监听 Emby/Jellyfin Webhook 入库事件，通过 Telegram / 企业微信 / Bark 发送精美媒体通知。支持TMDB元数据增强、剧集合并推送、消息去重。"
     plugin_icon = "https://raw.githubusercontent.com/AWdress/MoviePilot-Plugins/main/plugins/awembypush/logo.png"
-    plugin_version = "1.5.4"
+    plugin_version = "1.5.5"
     plugin_author = "AWdress"
     author_url = "https://github.com/AWdress/MoviePilot-Plugins"
     plugin_config_prefix = "awembypush_"
@@ -174,6 +174,7 @@ class AWEmbyPush(_PluginBase):
     _wx_agent_id: str = ""
     _wx_user_id: str = "@all"
     _wx_proxy_url: str = ""
+    _wx_no_proxy: bool = True
     _wx_msg_type: str = "news_notice"
     _bark_server: str = "https://api.day.app"
     _bark_keys: str = ""
@@ -213,6 +214,7 @@ class AWEmbyPush(_PluginBase):
         self._wx_agent_id = config.get("wx_agent_id", "")
         self._wx_user_id = config.get("wx_user_id", "@all")
         self._wx_proxy_url = config.get("wx_proxy_url", "").rstrip("/")
+        self._wx_no_proxy = config.get("wx_no_proxy", True)
         self._wx_msg_type = config.get("wx_msg_type", "news_notice")
         self._bark_server = config.get("bark_server", "https://api.day.app").rstrip("/")
         self._bark_keys = config.get("bark_keys", "")
@@ -306,6 +308,12 @@ class AWEmbyPush(_PluginBase):
     @property
     def _proxies(self) -> Optional[dict]:
         return getattr(settings, 'PROXY', None)
+
+    @property
+    def _wx_proxies(self) -> Optional[dict]:
+        if self._wx_no_proxy:
+            return None
+        return self._proxies
 
     @property
     def _tmdb_api_key(self) -> str:
@@ -905,7 +913,7 @@ class AWEmbyPush(_PluginBase):
             res = requests.get(
                 f"{self._effective_wx_proxy_url}/cgi-bin/gettoken",
                 params={"corpid": self._effective_wx_corp_id, "corpsecret": self._effective_wx_corp_secret},
-                timeout=10, proxies=self._proxies
+                timeout=10, proxies=self._wx_proxies
             )
             data = res.json()
             if data.get("errcode", 0) == 0:
@@ -997,7 +1005,7 @@ class AWEmbyPush(_PluginBase):
                     "news": {"articles": [{"title": title_text, "description": "\n".join(desc_parts),
                                            "url": jump_url, "picurl": image_url}]},
                 }
-            res = requests.post(url, json=payload, timeout=15, proxies=self._proxies)
+            res = requests.post(url, json=payload, timeout=15, proxies=self._wx_proxies)
             data = res.json()
             if data.get("errcode", 0) == 0:
                 logger.info(f"AWEmbyPush 企业微信发送成功：{media['item_name']}")
@@ -1172,16 +1180,24 @@ class AWEmbyPush(_PluginBase):
                             {'title': '图文 (news) - 支持微信插件', 'value': 'news'},
                         ],
                         'hint': '微信插件仅支持图文(news)格式', 'persistent-hint': True}}]},
+                {'component': 'VCol', 'props': {'cols': 12, 'md': 3}, 'content': [
+                    {'component': 'VSwitch', 'props': {'model': 'wx_no_proxy', 'label': '微信免代理',
+                        'color': 'primary', 'hint': '微信请求不走全局代理', 'persistent-hint': True}}]},
             ] + ([
                 {'component': 'VCol', 'props': {'cols': 12, 'md': 3}, 'content': [
                     {'component': 'VTextField', 'props': {'model': 'wx_user_id', 'label': '接收用户',
                         'placeholder': '@all', 'hint': '默认推送全员', 'persistent-hint': True}}]},
-                {'component': 'VCol', 'props': {'cols': 12, 'md': 3}, 'content': [
-                    {'component': 'VTextField', 'props': {'model': 'wx_proxy_url', 'label': '代理地址',
-                        'placeholder': 'https://qyapi.weixin.qq.com',
-                        'hint': '自建代理可修改', 'persistent-hint': True}}]},
             ] if not self._use_mp_wx else [])}
         )
+        if not self._use_mp_wx:
+            wx_rows.append(
+                {'component': 'VRow', 'content': [
+                    {'component': 'VCol', 'props': {'cols': 12, 'md': 6}, 'content': [
+                        {'component': 'VTextField', 'props': {'model': 'wx_proxy_url', 'label': 'API 代理地址',
+                            'placeholder': 'https://qyapi.weixin.qq.com',
+                            'hint': '自建 API 反代可修改，非 HTTP 代理', 'persistent-hint': True}}]},
+                ]}
+            )
 
         # ── 组装完整表单 ──
         form_content = [
@@ -1351,7 +1367,7 @@ class AWEmbyPush(_PluginBase):
             "bark_body_template": self._default_bark_body_template(),
             "tg_bot_token": "", "tg_chat_id": "", "tg_api_host": "",
             "wx_corp_id": "", "wx_corp_secret": "", "wx_agent_id": "",
-            "wx_user_id": "@all", "wx_proxy_url": "", "wx_msg_type": "news_notice",
+            "wx_user_id": "@all", "wx_proxy_url": "", "wx_no_proxy": True, "wx_msg_type": "news_notice",
             "bark_server": "https://api.day.app", "bark_keys": "", "emby_server_url": "",
         }
 
